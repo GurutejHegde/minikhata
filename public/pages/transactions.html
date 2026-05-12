@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniKhata — Transactions</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-left">
+      <button class="hamburger" id="menuToggle">&#9776;</button>
+      <span class="nav-logo">₹ MiniKhata</span>
+    </div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn btn-sm btn-outline" id="logoutBtn">Logout</button>
+    </div>
+  </nav>
+
+  <div class="sidebar" id="sidebar">
+    <ul class="sidebar-menu">
+      <li><a href="dashboard.html">&#9632; Dashboard</a></li>
+      <li><a href="customers.html">&#128101; Customers</a></li>
+      <li><a href="transactions.html" class="active">&#128196; Transactions</a></li>
+    </ul>
+  </div>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h2 class="page-title">Transactions</h2>
+        <span class="page-sub">All credit and payment records</span>
+      </div>
+      <button class="btn btn-primary" id="addTxnBtn">+ Add</button>
+    </div>
+
+    <!-- FILTERS -->
+    <div class="filter-bar">
+      <select id="filterCustomer" class="filter-select">
+        <option value="">All Customers</option>
+      </select>
+      <select id="filterType" class="filter-select">
+        <option value="">All Types</option>
+        <option value="credit">Credit</option>
+        <option value="payment">Payment</option>
+      </select>
+      <input type="date" id="filterDate" class="filter-select" />
+      <button class="btn btn-sm btn-outline" id="clearFilters">Clear</button>
+    </div>
+
+    <!-- TABLE -->
+    <div class="card">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Type</th>
+              <th>Amount</th>
+              <th>Date</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody id="txnTableBody">
+            <tr><td colspan="5" class="empty-row">No transactions found</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- ADD TXN MODAL -->
+  <div class="modal-overlay hidden" id="txnModal">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h3>Add Transaction</h3>
+        <button class="modal-close" id="txnModalClose">&times;</button>
+      </div>
+      <form id="txnForm" class="modal-form">
+        <div class="form-group">
+          <label>Customer *</label>
+          <select id="txnCustomer" required>
+            <option value="">Select customer</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Type *</label>
+          <select id="txnType" required>
+            <option value="">Select type</option>
+            <option value="credit">Credit (gave on credit)</option>
+            <option value="payment">Payment (received)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Amount (₹) *</label>
+          <input type="number" id="txnAmount" placeholder="0" min="1" required />
+        </div>
+        <div class="form-group">
+          <label>Date *</label>
+          <input type="date" id="txnDate" required />
+        </div>
+        <div class="form-group">
+          <label>Note</label>
+          <input type="text" id="txnNote" placeholder="Optional description" />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="txnCancel">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="../js/app.js"></script>
+  <script>
+    requireAuth();
+    document.getElementById('navUser').textContent = sessionStorage.getItem('mk_user') || '';
+
+    function populateCustomerDropdowns() {
+      const customers = getCustomers();
+      const opts = customers.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
+      document.getElementById('filterCustomer').innerHTML = '<option value="">All Customers</option>' + opts;
+      document.getElementById('txnCustomer').innerHTML = '<option value="">Select customer</option>' + opts;
+    }
+
+    function renderTransactions() {
+      const customers = getCustomers();
+      let txns = getTransactions();
+
+      const cFilter = document.getElementById('filterCustomer').value;
+      const tFilter = document.getElementById('filterType').value;
+      const dFilter = document.getElementById('filterDate').value;
+
+      if (cFilter) txns = txns.filter(t => t.customerId === parseInt(cFilter));
+      if (tFilter) txns = txns.filter(t => t.type === tFilter);
+      if (dFilter) txns = txns.filter(t => t.date === dFilter);
+
+      txns.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      const body = document.getElementById('txnTableBody');
+      if (txns.length === 0) {
+        body.innerHTML = '<tr><td colspan="5" class="empty-row">No transactions found</td></tr>';
+        return;
+      }
+      body.innerHTML = txns.map(t => {
+        const c = customers.find(x => x.id === t.customerId);
+        return `
+          <tr>
+            <td><b>${escHtml(c ? c.name : '—')}</b></td>
+            <td><span class="badge ${t.type === 'credit' ? 'badge-red' : 'badge-green'}">${t.type}</span></td>
+            <td class="${t.type === 'credit' ? 'amount-due' : 'amount-paid'}">
+              ${t.type === 'credit' ? '+' : '-'}₹${t.amount.toLocaleString('en-IN')}
+            </td>
+            <td>${t.date}</td>
+            <td class="note-cell">${escHtml(t.note || '—')}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Filters
+    ['filterCustomer','filterType','filterDate'].forEach(id => {
+      document.getElementById(id).addEventListener('change', renderTransactions);
+    });
+    document.getElementById('clearFilters').addEventListener('click', () => {
+      document.getElementById('filterCustomer').value = '';
+      document.getElementById('filterType').value = '';
+      document.getElementById('filterDate').value = '';
+      renderTransactions();
+    });
+
+    // Modal
+    document.getElementById('addTxnBtn').addEventListener('click', () => {
+      document.getElementById('txnForm').reset();
+      document.getElementById('txnDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('txnModal').classList.remove('hidden');
+    });
+    document.getElementById('txnModalClose').addEventListener('click', () => {
+      document.getElementById('txnModal').classList.add('hidden');
+    });
+    document.getElementById('txnCancel').addEventListener('click', () => {
+      document.getElementById('txnModal').classList.add('hidden');
+    });
+    document.getElementById('txnModal').addEventListener('click', function(e) {
+      if (e.target === this) this.classList.add('hidden');
+    });
+
+    document.getElementById('txnForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      addTransaction({
+        customerId: parseInt(document.getElementById('txnCustomer').value),
+        type:       document.getElementById('txnType').value,
+        amount:     parseFloat(document.getElementById('txnAmount').value),
+        date:       document.getElementById('txnDate').value,
+        note:       document.getElementById('txnNote').value.trim(),
+      });
+      document.getElementById('txnModal').classList.add('hidden');
+      renderTransactions();
+    });
+
+    populateCustomerDropdowns();
+    renderTransactions();
+  </script>
+</body>
+</html>

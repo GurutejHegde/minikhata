@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniKhata — Dashboard</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+  <!-- TOP NAV -->
+  <nav class="navbar">
+    <div class="nav-left">
+      <button class="hamburger" id="menuToggle">&#9776;</button>
+      <span class="nav-logo">₹ MiniKhata</span>
+    </div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn btn-sm btn-outline" id="logoutBtn">Logout</button>
+    </div>
+  </nav>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <ul class="sidebar-menu">
+      <li><a href="dashboard.html" class="active">&#9632; Dashboard</a></li>
+      <li><a href="customers.html">&#128101; Customers</a></li>
+      <li><a href="transactions.html">&#128196; Transactions</a></li>
+    </ul>
+  </div>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+    <div class="page-header">
+      <h2 class="page-title">Dashboard</h2>
+      <span class="page-sub">Overview of your ledger</span>
+    </div>
+
+    <!-- STAT CARDS -->
+    <div class="stats-grid">
+      <div class="stat-card stat-blue">
+        <div class="stat-label">Total Customers</div>
+        <div class="stat-value" id="statCustomers">0</div>
+      </div>
+      <div class="stat-card stat-orange">
+        <div class="stat-label">Total Pending</div>
+        <div class="stat-value" id="statPending">₹0</div>
+      </div>
+      <div class="stat-card stat-green">
+        <div class="stat-label">Transactions Today</div>
+        <div class="stat-value" id="statToday">0</div>
+      </div>
+      <div class="stat-card stat-red">
+        <div class="stat-label">Overdue (&gt;30 days)</div>
+        <div class="stat-value" id="statOverdue">0</div>
+      </div>
+    </div>
+
+    <!-- CUSTOMERS WITH DUES -->
+    <div class="card">
+      <div class="card-header">
+        <h3>Customers with Pending Dues</h3>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="dueTable">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Phone</th>
+              <th>Balance Due</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="dueTableBody">
+            <tr><td colspan="4" class="empty-row">No pending dues</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RECENT TRANSACTIONS -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-header">
+        <h3>Recent Transactions</h3>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Type</th>
+              <th>Amount</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody id="recentTxnBody">
+            <tr><td colspan="4" class="empty-row">No transactions yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/app.js"></script>
+  <script>
+    requireAuth();
+    document.getElementById('navUser').textContent = sessionStorage.getItem('mk_user') || '';
+
+    function loadDashboard() {
+      const customers = getCustomers();
+      const txns = getTransactions();
+      const today = new Date().toISOString().split('T')[0];
+
+      // Stats
+      document.getElementById('statCustomers').textContent = customers.length;
+
+      let totalPending = 0;
+      let overdue = 0;
+      customers.forEach(c => {
+        const bal = getBalance(c.id, txns);
+        if (bal > 0) {
+          totalPending += bal;
+          const daysSince = daysSinceLastPayment(c.id, txns);
+          if (daysSince > 30) overdue++;
+        }
+      });
+      document.getElementById('statPending').textContent = '₹' + totalPending.toLocaleString('en-IN');
+      document.getElementById('statOverdue').textContent = overdue;
+
+      const todayTxns = txns.filter(t => t.date === today);
+      document.getElementById('statToday').textContent = todayTxns.length;
+
+      // Due table
+      const dueBody = document.getElementById('dueTableBody');
+      const withDues = customers
+        .map(c => ({ ...c, bal: getBalance(c.id, txns) }))
+        .filter(c => c.bal > 0)
+        .sort((a, b) => b.bal - a.bal);
+
+      if (withDues.length === 0) {
+        dueBody.innerHTML = '<tr><td colspan="4" class="empty-row">No pending dues</td></tr>';
+      } else {
+        dueBody.innerHTML = withDues.map(c => `
+          <tr>
+            <td><b>${escHtml(c.name)}</b></td>
+            <td>${escHtml(c.phone)}</td>
+            <td class="amount-due">₹${c.bal.toLocaleString('en-IN')}</td>
+            <td><a href="customers.html" class="link-btn">View</a></td>
+          </tr>
+        `).join('');
+      }
+
+      // Recent txns
+      const recentBody = document.getElementById('recentTxnBody');
+      const recent = [...txns].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0,5);
+      if (recent.length === 0) {
+        recentBody.innerHTML = '<tr><td colspan="4" class="empty-row">No transactions yet</td></tr>';
+      } else {
+        recentBody.innerHTML = recent.map(t => {
+          const c = customers.find(x => x.id === t.customerId);
+          return `
+            <tr>
+              <td>${escHtml(c ? c.name : '—')}</td>
+              <td><span class="badge ${t.type === 'credit' ? 'badge-red' : 'badge-green'}">${t.type}</span></td>
+              <td>₹${t.amount.toLocaleString('en-IN')}</td>
+              <td>${t.date}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>

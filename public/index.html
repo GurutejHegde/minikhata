@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniKhata — Login</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="login-page">
+
+  <div class="login-card">
+    <div class="login-logo">
+      <span class="logo-icon">₹</span>
+      <h1>MiniKhata</h1>
+      <p>Digital Ledger for Small Shops</p>
+    </div>
+
+    <form id="loginForm" class="login-form">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" placeholder="Enter username" autocomplete="username" />
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Enter password" autocomplete="current-password" />
+      </div>
+      <div id="loginError" class="error-msg hidden">Invalid username or password.</div>
+      <button type="submit" class="btn btn-primary btn-full">Login</button>
+    </form>
+
+    <p class="login-hint">Demo: username <b>admin</b> / password <b>1234</b></p>
+  </div>
+
+  <script>
+    // Redirect if already logged in
+    if (sessionStorage.getItem('mk_auth') === 'true') {
+      window.location.href = 'pages/dashboard.html';
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const u = document.getElementById('username').value.trim();
+      const p = document.getElementById('password').value.trim();
+      const err = document.getElementById('loginError');
+
+      // Demo credentials (replace with real API call once backend is ready)
+      if (u === 'admin' && p === '1234') {
+        sessionStorage.setItem('mk_auth', 'true');
+        sessionStorage.setItem('mk_user', u);
+        window.location.href = 'pages/dashboard.html';
+      } else {
+        err.classList.remove('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
