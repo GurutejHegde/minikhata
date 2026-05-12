@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniKhata — Customers</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-left">
+      <button class="hamburger" id="menuToggle">&#9776;</button>
+      <span class="nav-logo">₹ MiniKhata</span>
+    </div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn btn-sm btn-outline" id="logoutBtn">Logout</button>
+    </div>
+  </nav>
+
+  <div class="sidebar" id="sidebar">
+    <ul class="sidebar-menu">
+      <li><a href="dashboard.html">&#9632; Dashboard</a></li>
+      <li><a href="customers.html" class="active">&#128101; Customers</a></li>
+      <li><a href="transactions.html">&#128196; Transactions</a></li>
+    </ul>
+  </div>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h2 class="page-title">Customers</h2>
+        <span class="page-sub">Manage your customer records</span>
+      </div>
+      <button class="btn btn-primary" id="addCustomerBtn">+ Add Customer</button>
+    </div>
+
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="&#128269;  Search by name or phone..." />
+    </div>
+
+    <div id="customerList" class="customer-list">
+      <div class="empty-state">Loading...</div>
+    </div>
+  </main>
+
+  <!-- ADD/EDIT MODAL -->
+  <div class="modal-overlay hidden" id="customerModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalTitle">Add Customer</h3>
+        <button class="modal-close" id="modalClose">&times;</button>
+      </div>
+      <form id="customerForm" class="modal-form">
+        <input type="hidden" id="editId" />
+        <div class="form-group">
+          <label>Full Name *</label>
+          <input type="text" id="cName" placeholder="e.g. Rajan Medical" required />
+        </div>
+        <div class="form-group">
+          <label>Phone Number *</label>
+          <input type="tel" id="cPhone" placeholder="e.g. 9876543210" required />
+        </div>
+        <div class="form-group">
+          <label>Address</label>
+          <input type="text" id="cAddress" placeholder="e.g. Main Bazaar" />
+        </div>
+        <div id="formError" class="error-msg hidden"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="cancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="saveBtn">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CUSTOMER DRAWER -->
+  <div class="drawer-overlay hidden" id="drawerOverlay"></div>
+  <div class="drawer hidden" id="customerDrawer">
+    <div class="drawer-header">
+      <div>
+        <h3 id="drawerName"></h3>
+        <span id="drawerPhone" class="drawer-sub"></span>
+      </div>
+      <button class="modal-close" id="drawerClose">&times;</button>
+    </div>
+    <div class="drawer-balance">
+      <span class="balance-label">Balance Due</span>
+      <span class="balance-value" id="drawerBalance">₹0</span>
+    </div>
+    <div class="drawer-actions">
+      <button class="btn btn-red btn-sm" id="drawerCredit">+ Add Credit</button>
+      <button class="btn btn-green btn-sm" id="drawerPayment">+ Add Payment</button>
+    </div>
+    <h4 class="drawer-section-title">Transaction History</h4>
+    <div id="drawerTxnList" class="txn-list"></div>
+  </div>
+
+  <!-- QUICK TXN MODAL -->
+  <div class="modal-overlay hidden" id="txnModal">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h3 id="txnModalTitle">Add Credit</h3>
+        <button class="modal-close" id="txnModalClose">&times;</button>
+      </div>
+      <form id="txnForm" class="modal-form">
+        <input type="hidden" id="txnCustomerId" />
+        <input type="hidden" id="txnType" />
+        <div class="form-group">
+          <label>Amount (₹) *</label>
+          <input type="number" id="txnAmount" placeholder="0" min="1" required />
+        </div>
+        <div class="form-group">
+          <label>Date *</label>
+          <input type="date" id="txnDate" required />
+        </div>
+        <div class="form-group">
+          <label>Note</label>
+          <input type="text" id="txnNote" placeholder="Optional description" />
+        </div>
+        <div id="txnError" class="error-msg hidden"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="txnCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="txnSaveBtn">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="../js/app.js"></script>
+  <script>
+    let activeDrawerCustomerId = null;
+    let searchTimer = null;
+
+    async function renderCustomers(query = '') {
+      const list = document.getElementById('customerList');
+      list.innerHTML = '<div class="empty-state">Loading...</div>';
+      try {
+        const customers = query
+          ? await apiFetch(`/api/customers/search?q=${encodeURIComponent(query)}`)
+          : await getCustomers();
+
+        if (customers.length === 0) {
+          list.innerHTML = '<div class="empty-state">No customers found. Add your first customer!</div>';
+          return;
+        }
+        list.innerHTML = customers.map(c => {
+          const bal    = parseFloat(c.balance || 0);
+          const hasDue = bal > 0;
+          return `
+            <div class="customer-card" onclick="openDrawer(${c.id})">
+              <div class="customer-avatar">${escHtml(c.name[0].toUpperCase())}</div>
+              <div class="customer-info">
+                <div class="customer-name">${escHtml(c.name)}</div>
+                <div class="customer-phone">${escHtml(c.phone)}</div>
+                ${c.address ? `<div class="customer-addr">${escHtml(c.address)}</div>` : ''}
+              </div>
+              <div class="customer-meta">
+                <div class="customer-balance ${hasDue ? 'due' : 'clear'}">
+                  ${hasDue ? '₹' + bal.toLocaleString('en-IN') : 'Clear'}
+                </div>
+                <div class="customer-card-actions" onclick="event.stopPropagation()">
+                  <button class="icon-btn" onclick="openEdit(${c.id})" title="Edit">&#9998;</button>
+                  <button class="icon-btn icon-btn-red" onclick="deleteCustomer(${c.id})" title="Delete">&#128465;</button>
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+      } catch (err) {
+        list.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+      }
+    }
+
+    // ── DRAWER ────────────────────────────────────────────────────────────
+    async function openDrawer(id) {
+      activeDrawerCustomerId = id;
+      const drawer  = document.getElementById('customerDrawer');
+      const overlay = document.getElementById('drawerOverlay');
+      document.getElementById('drawerTxnList').innerHTML = '<div class="empty-state-sm">Loading...</div>';
+      drawer.classList.remove('hidden');
+      overlay.classList.remove('hidden');
+      setTimeout(() => drawer.classList.add('open'), 10);
+
+      try {
+        const [customer, txns] = await Promise.all([
+          apiFetch(`/api/customers/${id}`),
+          getCustomerTransactions(id),
+        ]);
+
+        document.getElementById('drawerName').textContent  = customer.name;
+        document.getElementById('drawerPhone').textContent = customer.phone;
+
+        const bal   = parseFloat(customer.balance);
+        const balEl = document.getElementById('drawerBalance');
+        balEl.textContent = '₹' + bal.toLocaleString('en-IN');
+        balEl.className   = 'balance-value ' + (bal > 0 ? 'due' : 'clear');
+
+        const txnList = document.getElementById('drawerTxnList');
+        txnList.innerHTML = txns.length === 0
+          ? '<div class="empty-state-sm">No transactions yet</div>'
+          : txns.map(t => `
+              <div class="txn-item">
+                <div class="txn-left">
+                  <span class="badge ${t.type === 'credit' ? 'badge-red' : 'badge-green'}">${t.type}</span>
+                  <div class="txn-note">${escHtml(t.note || '—')}</div>
+                  <div class="txn-date">${t.date}</div>
+                </div>
+                <div class="txn-amount ${t.type === 'credit' ? 'amount-due' : 'amount-paid'}">
+                  ${t.type === 'credit' ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN')}
+                </div>
+              </div>`).join('');
+      } catch (err) {
+        document.getElementById('drawerTxnList').innerHTML =
+          `<div class="empty-state-sm">Error: ${err.message}</div>`;
+      }
+    }
+
+    function closeDrawer() {
+      const drawer = document.getElementById('customerDrawer');
+      drawer.classList.remove('open');
+      document.getElementById('drawerOverlay').classList.add('hidden');
+      setTimeout(() => drawer.classList.add('hidden'), 280);
+      activeDrawerCustomerId = null;
+    }
+
+    document.getElementById('drawerClose').addEventListener('click', closeDrawer);
+    document.getElementById('drawerOverlay').addEventListener('click', closeDrawer);
+
+    // ── ADD / EDIT MODAL ──────────────────────────────────────────────────
+    async function openEdit(id) {
+      document.getElementById('modalTitle').textContent = 'Edit Customer';
+      document.getElementById('editId').value = id;
+      try {
+        const c = await apiFetch(`/api/customers/${id}`);
+        document.getElementById('cName').value    = c.name;
+        document.getElementById('cPhone').value   = c.phone;
+        document.getElementById('cAddress').value = c.address || '';
+      } catch {}
+      document.getElementById('customerModal').classList.remove('hidden');
+    }
+
+    document.getElementById('addCustomerBtn').addEventListener('click', () => {
+      document.getElementById('modalTitle').textContent = 'Add Customer';
+      document.getElementById('editId').value = '';
+      document.getElementById('customerForm').reset();
+      document.getElementById('formError').classList.add('hidden');
+      document.getElementById('customerModal').classList.remove('hidden');
+    });
+
+    function closeModal() { document.getElementById('customerModal').classList.add('hidden'); }
+    document.getElementById('modalClose').addEventListener('click', closeModal);
+    document.getElementById('cancelBtn').addEventListener('click', closeModal);
+    document.getElementById('customerModal').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
+
+    document.getElementById('customerForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const id  = document.getElementById('editId').value;
+      const btn = document.getElementById('saveBtn');
+      const err = document.getElementById('formError');
+      err.classList.add('hidden');
+      btn.disabled = true; btn.textContent = 'Saving...';
+
+      const data = {
+        name:    document.getElementById('cName').value.trim(),
+        phone:   document.getElementById('cPhone').value.trim(),
+        address: document.getElementById('cAddress').value.trim(),
+      };
+      try {
+        if (id) await updateCustomer(parseInt(id), data);
+        else    await addCustomer(data);
+        closeModal();
+        renderCustomers(document.getElementById('searchInput').value);
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove('hidden');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Save';
+      }
+    });
+
+    async function deleteCustomer(id) {
+      if (!confirm('Delete this customer and all their transactions?')) return;
+      try {
+        await removeCustomer(id);
+        renderCustomers(document.getElementById('searchInput').value);
+      } catch (ex) { alert(ex.message); }
+    }
+
+    // ── QUICK TXN ─────────────────────────────────────────────────────────
+    function openTxnModal(type) {
+      document.getElementById('txnModalTitle').textContent = type === 'credit' ? '+ Add Credit' : '+ Add Payment';
+      document.getElementById('txnType').value       = type;
+      document.getElementById('txnCustomerId').value = activeDrawerCustomerId;
+      document.getElementById('txnDate').value       = new Date().toISOString().split('T')[0];
+      document.getElementById('txnForm').reset();
+      document.getElementById('txnDate').value       = new Date().toISOString().split('T')[0];
+      document.getElementById('txnError').classList.add('hidden');
+      document.getElementById('txnModal').classList.remove('hidden');
+    }
+
+    document.getElementById('drawerCredit').addEventListener('click',  () => openTxnModal('credit'));
+    document.getElementById('drawerPayment').addEventListener('click', () => openTxnModal('payment'));
+    document.getElementById('txnModalClose').addEventListener('click', () => document.getElementById('txnModal').classList.add('hidden'));
+    document.getElementById('txnCancelBtn').addEventListener('click',  () => document.getElementById('txnModal').classList.add('hidden'));
+
+    document.getElementById('txnForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const btn = document.getElementById('txnSaveBtn');
+      const err = document.getElementById('txnError');
+      err.classList.add('hidden');
+      btn.disabled = true; btn.textContent = 'Saving...';
+      try {
+        await addTransaction({
+          customerId: parseInt(document.getElementById('txnCustomerId').value),
+          type:       document.getElementById('txnType').value,
+          amount:     parseFloat(document.getElementById('txnAmount').value),
+          date:       document.getElementById('txnDate').value,
+          note:       document.getElementById('txnNote').value.trim(),
+        });
+        document.getElementById('txnModal').classList.add('hidden');
+        openDrawer(activeDrawerCustomerId);
+        renderCustomers(document.getElementById('searchInput').value);
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove('hidden');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Save';
+      }
+    });
+
+    // ── SEARCH (debounced) ─────────────────────────────────────────────────
+    document.getElementById('searchInput').addEventListener('input', function() {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => renderCustomers(this.value), 300);
+    });
+
+    // ── INIT ──────────────────────────────────────────────────────────────
+    requireAuth().then(() => renderCustomers());
+  </script>
+</body>
+</html>
