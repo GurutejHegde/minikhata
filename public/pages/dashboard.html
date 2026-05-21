@@ -88,40 +88,54 @@
       await requireAuth();
 
       // Stats
-      const stats = await getDashboardStats();
-      document.getElementById('statCustomers').textContent = stats.totalCustomers;
-      document.getElementById('statPending').textContent   = '₹' + stats.totalPending.toLocaleString('en-IN');
-      document.getElementById('statToday').textContent     = stats.todayCount;
-      document.getElementById('statOverdue').textContent   = stats.overdueCount;
+      try {
+        const stats = await getDashboardStats();
+        document.getElementById('statCustomers').textContent = stats.totalCustomers;
+        document.getElementById('statPending').textContent   = '₹' + stats.totalPending.toLocaleString('en-IN');
+        document.getElementById('statToday').textContent     = stats.todayCount;
+        document.getElementById('statOverdue').textContent   = stats.overdueCount;
+      } catch (err) {
+        console.error('Failed to load dashboard stats:', err);
+      }
 
       // Customers with dues
-      const customers = await getCustomers();
-      const withDues  = customers.filter(c => parseFloat(c.balance) > 0)
-                                 .sort((a,b) => b.balance - a.balance);
-      const dueBody = document.getElementById('dueTableBody');
-      dueBody.innerHTML = withDues.length === 0
-        ? '<tr><td colspan="4" class="empty-row">No pending dues</td></tr>'
-        : withDues.map(c => `
-            <tr>
-              <td><b>${escHtml(c.name)}</b></td>
-              <td>${escHtml(c.phone)}</td>
-              <td class="amount-due">₹${parseFloat(c.balance).toLocaleString('en-IN')}</td>
-              <td><a href="customers.html" class="link-btn">View</a></td>
-            </tr>`).join('');
+      try {
+        const customers = await getCustomers();
+        const withDues  = customers.filter(c => parseFloat(c.balance) > 0)
+                                   .sort((a,b) => b.balance - a.balance);
+        const dueBody = document.getElementById('dueTableBody');
+        dueBody.innerHTML = withDues.length === 0
+          ? '<tr><td colspan="4" class="empty-row">No pending dues</td></tr>'
+          : withDues.map(c => `
+              <tr>
+                <td><b>${escHtml(c.name)}</b></td>
+                <td>${escHtml(c.phone)}</td>
+                <td class="amount-due">₹${parseFloat(c.balance).toLocaleString('en-IN')}</td>
+                <td><a href="customers.html" class="link-btn">View</a></td>
+              </tr>`).join('');
+      } catch (err) {
+        document.getElementById('dueTableBody').innerHTML = 
+          `<tr><td colspan="4" class="empty-row">Error loading dues: ${err.message}</td></tr>`;
+      }
 
       // Recent transactions
-      const txns = await getTransactions();
-      const recent = txns.slice(0, 5);
-      const recentBody = document.getElementById('recentTxnBody');
-      recentBody.innerHTML = recent.length === 0
-        ? '<tr><td colspan="4" class="empty-row">No transactions yet</td></tr>'
-        : recent.map(t => `
-            <tr>
-              <td>${escHtml(t.customerName)}</td>
-              <td><span class="badge ${t.type === 'credit' ? 'badge-red' : 'badge-green'}">${t.type}</span></td>
-              <td>₹${parseFloat(t.amount).toLocaleString('en-IN')}</td>
-              <td>${t.date}</td>
-            </tr>`).join('');
+      try {
+        const txns = await getTransactions();
+        const recent = txns.slice(0, 5);
+        const recentBody = document.getElementById('recentTxnBody');
+        recentBody.innerHTML = recent.length === 0
+          ? '<tr><td colspan="4" class="empty-row">No transactions yet</td></tr>'
+          : recent.map(t => `
+              <tr>
+                <td>${escHtml(t.customerName)}</td>
+                <td><span class="badge ${t.type === 'credit' ? 'badge-red' : 'badge-green'}">${t.type}</span></td>
+                <td>₹${parseFloat(t.amount).toLocaleString('en-IN')}</td>
+                <td>${t.date}</td>
+              </tr>`).join('');
+      } catch (err) {
+        document.getElementById('recentTxnBody').innerHTML =
+          `<tr><td colspan="4" class="empty-row">Error loading transactions: ${err.message}</td></tr>`;
+      }
     }
 
     loadDashboard();

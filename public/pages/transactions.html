@@ -116,14 +116,18 @@
   <script src="../js/app.js"></script>
   <script>
     async function populateCustomerDropdowns() {
-      const customers = await getCustomers();
-      const opts = customers.map(c =>
-        `<option value="${c.id}">${escHtml(c.name)}</option>`
-      ).join('');
-      document.getElementById('filterCustomer').innerHTML =
-        '<option value="">All Customers</option>' + opts;
-      document.getElementById('txnCustomer').innerHTML =
-        '<option value="">Select customer</option>' + opts;
+      try {
+        const customers = await getCustomers();
+        const opts = customers.map(c =>
+          `<option value="${c.id}">${escHtml(c.name)}</option>`
+        ).join('');
+        document.getElementById('filterCustomer').innerHTML =
+          '<option value="">All Customers</option>' + opts;
+        document.getElementById('txnCustomer').innerHTML =
+          '<option value="">Select customer</option>' + opts;
+      } catch (err) {
+        console.error('Failed to populate customers:', err);
+      }
     }
 
     async function renderTransactions() {
@@ -156,6 +160,7 @@
       }
     }
 
+    // Filters
     ['filterCustomer','filterType','filterDate'].forEach(id => {
       document.getElementById(id).addEventListener('change', renderTransactions);
     });

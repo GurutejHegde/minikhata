@@ -67,7 +67,11 @@ document.addEventListener('DOMContentLoaded', function () {
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
-      await fetch(`${API}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+      try {
+        await fetch(`${API}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+      } catch (e) {
+        console.error('Logout request failed', e);
+      }
       window.location.href = '/index.html';
     });
   }
