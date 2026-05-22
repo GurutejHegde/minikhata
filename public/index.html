@@ -3,8 +3,39 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MiniKhata — Login</title>
+  <title>MiniKhata — Welcome</title>
   <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .auth-tabs {
+      display: flex;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 4px;
+      margin-bottom: 24px;
+    }
+    .auth-tab {
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      padding: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+      font-family: var(--font-sans);
+    }
+    .auth-tab.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+    .hidden {
+      display: none !important;
+    }
+  </style>
 </head>
 <body class="login-page">
 
@@ -12,23 +43,47 @@
     <div class="login-logo">
       <span class="logo-icon">₹</span>
       <h1>MiniKhata</h1>
-      <p>Digital Ledger for Small Shops</p>
+      <p>Digital Ledger Management System</p>
     </div>
 
+    <div class="auth-tabs">
+      <button type="button" class="auth-tab active" id="tabLogin" onclick="switchTab('login')">Login</button>
+      <button type="button" class="auth-tab" id="tabRegister" onclick="switchTab('register')">Sign Up</button>
+    </div>
+
+    <!-- Login Form -->
     <form id="loginForm" class="login-form">
       <div class="form-group">
         <label for="username">Username</label>
-        <input type="text" id="username" placeholder="Enter username" autocomplete="username" />
+        <input type="text" id="username" placeholder="Enter username" autocomplete="username" required />
       </div>
       <div class="form-group">
         <label for="password">Password</label>
-        <input type="password" id="password" placeholder="Enter password" autocomplete="current-password" />
+        <input type="password" id="password" placeholder="Enter password" autocomplete="current-password" required />
       </div>
       <div id="loginError" class="error-msg hidden">Invalid username or password.</div>
       <button type="submit" class="btn btn-primary btn-full" id="loginBtn">Login</button>
     </form>
 
-    <p class="login-hint">Default: <b>admin</b> / <b>1234</b></p>
+    <!-- Register Form -->
+    <form id="registerForm" class="login-form hidden">
+      <div class="form-group">
+        <label for="regUsername">Username</label>
+        <input type="text" id="regUsername" placeholder="Create username (min 3 chars)" autocomplete="username" required />
+      </div>
+      <div class="form-group">
+        <label for="regPassword">Password</label>
+        <input type="password" id="regPassword" placeholder="Create password (min 4 chars)" autocomplete="new-password" required />
+      </div>
+      <div class="form-group">
+        <label for="regConfirmPassword">Confirm Password</label>
+        <input type="password" id="regConfirmPassword" placeholder="Confirm password" autocomplete="new-password" required />
+      </div>
+      <div id="registerError" class="error-msg hidden"></div>
+      <button type="submit" class="btn btn-primary btn-full" id="registerBtn">Create Account</button>
+    </form>
+
+    <p class="login-hint" id="authHint">Default: <b>admin</b> / <b>1234</b></p>
   </div>
 
   <script>
@@ -38,6 +93,29 @@
       .then(d => { if (d.loggedIn) window.location.href = '/pages/dashboard.html'; })
       .catch(() => {});
 
+    function switchTab(mode) {
+      const tabLogin = document.getElementById('tabLogin');
+      const tabRegister = document.getElementById('tabRegister');
+      const loginForm = document.getElementById('loginForm');
+      const registerForm = document.getElementById('registerForm');
+      const authHint = document.getElementById('authHint');
+
+      if (mode === 'login') {
+        tabLogin.classList.add('active');
+        tabRegister.classList.remove('active');
+        loginForm.classList.remove('hidden');
+        registerForm.classList.add('hidden');
+        authHint.classList.remove('hidden');
+      } else {
+        tabLogin.classList.remove('active');
+        tabRegister.classList.add('active');
+        loginForm.classList.add('hidden');
+        registerForm.classList.remove('hidden');
+        authHint.classList.add('hidden');
+      }
+    }
+
+    // Login Submission
     document.getElementById('loginForm').addEventListener('submit', async function (e) {
       e.preventDefault();
       const btn = document.getElementById('loginBtn');
@@ -60,6 +138,8 @@
         if (res.ok) {
           window.location.href = '/pages/dashboard.html';
         } else {
+          const data = await res.json().catch(() => ({}));
+          err.textContent = data.error || 'Invalid username or password.';
           err.classList.remove('hidden');
           btn.textContent = 'Login';
           btn.disabled = false;
@@ -68,6 +148,61 @@
         err.textContent = 'Cannot connect to server. Is it running?';
         err.classList.remove('hidden');
         btn.textContent = 'Login';
+        btn.disabled = false;
+      }
+    });
+
+    // Register Submission
+    document.getElementById('registerForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const btn = document.getElementById('registerBtn');
+      const err = document.getElementById('registerError');
+      err.classList.add('hidden');
+
+      const username = document.getElementById('regUsername').value.trim();
+      const password = document.getElementById('regPassword').value;
+      const confirmPassword = document.getElementById('regConfirmPassword').value;
+
+      if (username.length < 3) {
+        err.textContent = 'Username must be at least 3 characters.';
+        err.classList.remove('hidden');
+        return;
+      }
+      if (password.length < 4) {
+        err.textContent = 'Password must be at least 4 characters.';
+        err.classList.remove('hidden');
+        return;
+      }
+      if (password !== confirmPassword) {
+        err.textContent = 'Passwords do not match.';
+        err.classList.remove('hidden');
+        return;
+      }
+
+      btn.textContent = 'Creating Account...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/auth/register', {
+          method:      'POST',
+          credentials: 'include',
+          headers:     { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+
+        if (res.ok) {
+          window.location.href = '/pages/dashboard.html';
+        } else {
+          const data = await res.json().catch(() => ({}));
+          err.textContent = data.error || 'Registration failed.';
+          err.classList.remove('hidden');
+          btn.textContent = 'Create Account';
+          btn.disabled = false;
+        }
+      } catch {
+        err.textContent = 'Cannot connect to server. Is it running?';
+        err.classList.remove('hidden');
+        btn.textContent = 'Create Account';
         btn.disabled = false;
       }
     });

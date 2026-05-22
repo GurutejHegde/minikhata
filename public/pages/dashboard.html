@@ -5,6 +5,71 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MiniKhata — Dashboard</title>
   <link rel="stylesheet" href="../css/style.css" />
+  <style>
+    @media (min-width: 1024px) {
+      .db-grid {
+        grid-template-columns: 1.8fr 1.2fr !important;
+      }
+    }
+    .due-list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-light);
+      transition: background 0.2s ease;
+    }
+    .due-list-item:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .due-list-item:last-child {
+      border-bottom: none;
+    }
+    .due-list-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .due-list-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-primary);
+    }
+    .due-list-date {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .due-list-amount {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+    .due-val {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--red);
+    }
+    .due-val-upcoming {
+      font-size: 14px;
+      font-weight: 700;
+      color: #EA580C;
+    }
+    .due-action-btn {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: var(--radius-sm);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border-light);
+      color: var(--text-primary);
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .due-action-btn:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+  </style>
 </head>
 <body>
 
@@ -21,9 +86,12 @@
 
   <div class="sidebar" id="sidebar">
     <ul class="sidebar-menu">
-      <li><a href="dashboard.html" class="active">&#9632; Dashboard</a></li>
-      <li><a href="customers.html">&#128101; Customers</a></li>
-      <li><a href="transactions.html">&#128196; Transactions</a></li>
+      <li><a href="dashboard.html" class="active" id="linkDashboard">&#9632; Dashboard</a></li>
+      <li><a href="customers.html" id="linkCustomers">&#128101; Customers</a></li>
+      <li><a href="transactions.html" id="linkTransactions">&#128196; Transactions</a></li>
+      <li><a href="overdue.html" id="linkOverdue">&#9888; Overdue <span id="overdueBadge" class="badge badge-red hidden">0</span></a></li>
+      <li><a href="reports.html" id="linkReports">&#128200; Reports</a></li>
+      <li><a href="profile.html" id="linkProfile">&#128100; Profile</a></li>
     </ul>
   </div>
   <div class="sidebar-overlay" id="sidebarOverlay"></div>
@@ -48,36 +116,61 @@
         <div class="stat-value" id="statToday">—</div>
       </div>
       <div class="stat-card stat-red">
-        <div class="stat-label">Overdue (&gt;30 days)</div>
+        <div class="stat-label" id="lblOverdue">Overdue</div>
         <div class="stat-value" id="statOverdue">—</div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-header"><h3>Customers with Pending Dues</h3></div>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr><th>Customer</th><th>Phone</th><th>Balance Due</th><th>Action</th></tr>
-          </thead>
-          <tbody id="dueTableBody">
-            <tr><td colspan="4" class="empty-row">Loading...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <!-- Dashboard layout grid -->
+    <div style="display: grid; grid-template-columns: 1fr; gap: 24px; align-items: start;" class="db-grid">
+      <!-- Main Content (Left Column) -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <div class="card">
+          <div class="card-header"><h3 id="lblDuesTableTitle">Customers with Pending Dues</h3></div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th id="lblTableCustomerCol">Customer</th><th>Phone</th><th>Balance Due</th><th>Action</th></tr>
+              </thead>
+              <tbody id="dueTableBody">
+                <tr><td colspan="4" class="empty-row">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-    <div class="card" style="margin-top:16px">
-      <div class="card-header"><h3>Recent Transactions</h3></div>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr><th>Customer</th><th>Type</th><th>Amount</th><th>Date</th></tr>
-          </thead>
-          <tbody id="recentTxnBody">
-            <tr><td colspan="4" class="empty-row">Loading...</td></tr>
-          </tbody>
-        </table>
+        <div class="card">
+          <div class="card-header"><h3 id="lblRecentTxnTitle">Recent Transactions</h3></div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th id="lblRecentTxnCustomerCol">Customer</th><th>Type</th><th>Amount</th><th>Date</th></tr>
+              </thead>
+              <tbody id="recentTxnBody">
+                <tr><td colspan="4" class="empty-row">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar Content (Right Column) -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Overdue Credits Panel -->
+        <div class="card">
+          <div class="card-header" style="border-bottom: 1px solid var(--border-light);"><h3 id="lblOverdueDues">Overdue Dues</h3></div>
+          <div style="padding: 0;" id="overdueSummariesList">
+            <div class="empty-row" style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading...</div>
+          </div>
+        </div>
+
+        <!-- Upcoming Dues Panel -->
+        <div class="card">
+          <div class="card-header" style="border-bottom: 1px solid var(--border-light);"><h3 id="lblUpcomingDues">Upcoming Dues (Next 7 Days)</h3></div>
+          <div style="padding: 0;" id="upcomingDuesList">
+            <div class="empty-row" style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading...</div>
+          </div>
+        </div>
       </div>
     </div>
   </main>
@@ -87,13 +180,95 @@
     async function loadDashboard() {
       await requireAuth();
 
-      // Stats
+      const isPersonal = window.currentUserType === 'personal';
+
+      // Adapt terminology dynamically
+      const lblOverdue = document.getElementById('lblOverdue');
+      if (lblOverdue) {
+        lblOverdue.textContent = isPersonal ? 'Overdue Lendings' : 'Overdue Accounts';
+      }
+
+      const lblDuesTableTitle = document.getElementById('lblDuesTableTitle');
+      if (lblDuesTableTitle) {
+        lblDuesTableTitle.textContent = isPersonal ? 'People with Pending Lendings' : 'Customers with Pending Dues';
+      }
+
+      const lblTableCustomerCol = document.getElementById('lblTableCustomerCol');
+      if (lblTableCustomerCol) {
+        lblTableCustomerCol.textContent = isPersonal ? 'Person' : 'Customer';
+      }
+
+      const lblRecentTxnTitle = document.getElementById('lblRecentTxnTitle');
+      if (lblRecentTxnTitle) {
+        lblRecentTxnTitle.textContent = isPersonal ? 'Recent Lendings' : 'Recent Transactions';
+      }
+
+      const lblRecentTxnCustomerCol = document.getElementById('lblRecentTxnCustomerCol');
+      if (lblRecentTxnCustomerCol) {
+        lblRecentTxnCustomerCol.textContent = isPersonal ? 'Person' : 'Customer';
+      }
+
+      const lblOverdueDues = document.getElementById('lblOverdueDues');
+      if (lblOverdueDues) {
+        lblOverdueDues.textContent = isPersonal ? 'Overdue Lendings' : 'Overdue Dues';
+      }
+
+      const lblUpcomingDues = document.getElementById('lblUpcomingDues');
+      if (lblUpcomingDues) {
+        lblUpcomingDues.textContent = isPersonal ? 'Upcoming Repayments' : 'Upcoming Dues (Next 7 Days)';
+      }
+
+      // Stats & Lists
       try {
         const stats = await getDashboardStats();
         document.getElementById('statCustomers').textContent = stats.totalCustomers;
         document.getElementById('statPending').textContent   = '₹' + stats.totalPending.toLocaleString('en-IN');
         document.getElementById('statToday').textContent     = stats.todayCount;
         document.getElementById('statOverdue').textContent   = stats.overdueCount;
+
+        // Render Overdue summaries
+        const overdueList = document.getElementById('overdueSummariesList');
+        if (stats.overdueSummaries && stats.overdueSummaries.length > 0) {
+          overdueList.innerHTML = stats.overdueSummaries.map(s => {
+            const daysOverdue = Math.max(1, Math.round((new Date() - new Date(s.dueDate)) / (1000 * 60 * 60 * 24)));
+            return `
+              <div class="due-list-item">
+                <div class="due-list-info">
+                  <span class="due-list-name">${escHtml(s.customerName)}</span>
+                  <span class="due-list-date">${daysOverdue} days overdue (Due: ${new Date(s.dueDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })})</span>
+                </div>
+                <div class="due-list-amount">
+                  <span class="due-val">₹${parseFloat(s.remainingAmount).toLocaleString('en-IN')}</span>
+                  <a class="due-action-btn" href="customers.html?openDrawer=${s.customerId}">Collect</a>
+                </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          overdueList.innerHTML = `<div style="text-align:center; padding: 20px; color: var(--text-secondary); font-size: 13px;">🎉 No overdue ${isPersonal ? 'lendings' : 'dues'}!</div>`;
+        }
+
+        // Render Upcoming dues
+        const upcomingList = document.getElementById('upcomingDuesList');
+        if (stats.upcomingDues && stats.upcomingDues.length > 0) {
+          upcomingList.innerHTML = stats.upcomingDues.map(s => {
+            return `
+              <div class="due-list-item">
+                <div class="due-list-info">
+                  <span class="due-list-name">${escHtml(s.customerName)}</span>
+                  <span class="due-list-date">Due on: ${new Date(s.dueDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                </div>
+                <div class="due-list-amount">
+                  <span class="due-val-upcoming">₹${parseFloat(s.remainingAmount).toLocaleString('en-IN')}</span>
+                  <a class="due-action-btn" href="customers.html?openDrawer=${s.customerId}">View</a>
+                </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          upcomingList.innerHTML = `<div style="text-align:center; padding: 20px; color: var(--text-secondary); font-size: 13px;">No upcoming payments in 7 days</div>`;
+        }
+
       } catch (err) {
         console.error('Failed to load dashboard stats:', err);
       }
@@ -111,7 +286,7 @@
                 <td><b>${escHtml(c.name)}</b></td>
                 <td>${escHtml(c.phone)}</td>
                 <td class="amount-due">₹${parseFloat(c.balance).toLocaleString('en-IN')}</td>
-                <td><a href="customers.html" class="link-btn">View</a></td>
+                <td><a href="customers.html?openDrawer=${c.id}" class="link-btn">View</a></td>
               </tr>`).join('');
       } catch (err) {
         document.getElementById('dueTableBody').innerHTML = 
@@ -120,18 +295,23 @@
 
       // Recent transactions
       try {
-        const txns = await getTransactions();
+        const txnsRes = await getTransactions();
+        const txns = Array.isArray(txnsRes) ? txnsRes : (txnsRes.data || []);
         const recent = txns.slice(0, 5);
         const recentBody = document.getElementById('recentTxnBody');
         recentBody.innerHTML = recent.length === 0
           ? '<tr><td colspan="4" class="empty-row">No transactions yet</td></tr>'
-          : recent.map(t => `
-              <tr>
-                <td>${escHtml(t.customerName)}</td>
-                <td><span class="badge ${t.type === 'credit' ? 'badge-red' : 'badge-green'}">${t.type}</span></td>
-                <td>₹${parseFloat(t.amount).toLocaleString('en-IN')}</td>
-                <td>${t.date}</td>
-              </tr>`).join('');
+          : recent.map(t => {
+              const displayType = getTxnTypeName(t.type, window.currentUserType);
+              const badgeClass = t.type === 'credit' ? 'badge-red' : 'badge-green';
+              return `
+                <tr>
+                  <td>${escHtml(t.customerName)}</td>
+                  <td><span class="badge ${badgeClass}">${escHtml(displayType)}</span></td>
+                  <td>₹${parseFloat(t.amount).toLocaleString('en-IN')}</td>
+                  <td>${t.date}</td>
+                </tr>`;
+            }).join('');
       } catch (err) {
         document.getElementById('recentTxnBody').innerHTML =
           `<tr><td colspan="4" class="empty-row">Error loading transactions: ${err.message}</td></tr>`;

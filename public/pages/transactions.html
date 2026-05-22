@@ -21,9 +21,12 @@
 
   <div class="sidebar" id="sidebar">
     <ul class="sidebar-menu">
-      <li><a href="dashboard.html">&#9632; Dashboard</a></li>
-      <li><a href="customers.html">&#128101; Customers</a></li>
-      <li><a href="transactions.html" class="active">&#128196; Transactions</a></li>
+      <li><a href="dashboard.html" id="linkDashboard">&#9632; Dashboard</a></li>
+      <li><a href="customers.html" id="linkCustomers">&#128101; Customers</a></li>
+      <li><a href="transactions.html" class="active" id="linkTransactions">&#128196; Transactions</a></li>
+      <li><a href="overdue.html" id="linkOverdue">&#9888; Overdue <span id="overdueBadge" class="badge badge-red hidden">0</span></a></li>
+      <li><a href="reports.html" id="linkReports">&#128200; Reports</a></li>
+      <li><a href="profile.html" id="linkProfile">&#128100; Profile</a></li>
     </ul>
   </div>
   <div class="sidebar-overlay" id="sidebarOverlay"></div>
@@ -31,8 +34,8 @@
   <main class="main-content">
     <div class="page-header">
       <div>
-        <h2 class="page-title">Transactions</h2>
-        <span class="page-sub">All credit and payment records</span>
+        <h2 class="page-title" id="txnTitle">Transactions</h2>
+        <span class="page-sub" id="txnSub">All credit and payment records</span>
       </div>
       <button class="btn btn-primary" id="addTxnBtn">+ Add</button>
     </div>
@@ -47,6 +50,7 @@
         <option value="payment">Payment</option>
       </select>
       <input type="date" id="filterDate" class="filter-select" />
+      <input type="text" id="filterSearch" class="filter-select" placeholder="Search notes, amount..." style="flex: 2; min-width: 180px;" />
       <button class="btn btn-sm btn-outline" id="clearFilters">Clear</button>
     </div>
 
@@ -55,17 +59,32 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th>Customer</th>
+              <th style="cursor: pointer;" onclick="toggleSort('customerName')">Customer <span id="sort_customerName"></span></th>
               <th>Type</th>
-              <th>Amount</th>
-              <th>Date</th>
-              <th>Note</th>
+              <th style="cursor: pointer;" onclick="toggleSort('amount')">Amount <span id="sort_amount"></span></th>
+              <th style="cursor: pointer;" onclick="toggleSort('date')">Date <span id="sort_date">▼</span></th>
+              <th>Details & Tags</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="txnTableBody">
-            <tr><td colspan="5" class="empty-row">Loading...</td></tr>
+            <tr><td colspan="6" class="empty-row">Loading...</td></tr>
           </tbody>
         </table>
+      </div>
+      <!-- PAGINATION CONTROLS -->
+      <div class="pagination-container" id="paginationControls">
+        <div class="pagination-info" id="paginationInfo">Showing 0-0 of 0 entries</div>
+        <div class="pagination-actions">
+          <label style="font-size: 12px; color: var(--text-secondary); margin-right: 4px;">Rows:</label>
+          <select id="paginationLimit" class="pagination-limit-select">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+          </select>
+          <button class="pagination-btn" id="paginationPrev" disabled>&lt; Prev</button>
+          <button class="pagination-btn" id="paginationNext" disabled>Next &gt;</button>
+        </div>
       </div>
     </div>
   </main>
@@ -74,12 +93,12 @@
   <div class="modal-overlay hidden" id="txnModal">
     <div class="modal modal-sm">
       <div class="modal-header">
-        <h3>Add Transaction</h3>
+        <h3 id="addTxnModalTitle">Add Transaction</h3>
         <button class="modal-close" id="txnModalClose">&times;</button>
       </div>
       <form id="txnForm" class="modal-form">
         <div class="form-group">
-          <label>Customer *</label>
+          <label id="lblCustomer">Customer *</label>
           <select id="txnCustomer" required>
             <option value="">Select customer</option>
           </select>
@@ -101,6 +120,23 @@
           <input type="date" id="txnDate" required />
         </div>
         <div class="form-group">
+          <label>Category</label>
+          <select id="txnCategory">
+            <option value="">None</option>
+            <option value="Sales">Sales</option>
+            <option value="Services">Services</option>
+            <option value="Purchase">Purchase</option>
+            <option value="Refund">Refund</option>
+            <option value="Personal Loan">Personal Loan</option>
+            <option value="Family & Friends">Family & Friends</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group" id="txnDueDateGroup">
+          <label>Due Date</label>
+          <input type="date" id="txnDueDate" />
+        </div>
+        <div class="form-group">
           <label>Note</label>
           <input type="text" id="txnNote" placeholder="Optional description" />
         </div>
@@ -113,8 +149,155 @@
     </div>
   </div>
 
+  <!-- EDIT TXN MODAL -->
+  <div class="modal-overlay hidden" id="editTxnModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Edit Transaction</h3>
+        <button class="modal-close" id="editTxnModalClose">&times;</button>
+      </div>
+      <form id="editTxnForm" class="modal-form">
+        <input type="hidden" id="editTxnId" />
+        <div class="form-group">
+          <label>Type *</label>
+          <select id="editTxnType" required>
+            <option value="credit">Credit (gave on credit)</option>
+            <option value="payment">Payment (received)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Amount (₹) *</label>
+          <input type="number" id="editTxnAmount" placeholder="0" min="1" required />
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="editTxnCategory">
+            <option value="">None</option>
+            <option value="Sales">Sales</option>
+            <option value="Services">Services</option>
+            <option value="Purchase">Purchase</option>
+            <option value="Refund">Refund</option>
+            <option value="Personal Loan">Personal Loan</option>
+            <option value="Family & Friends">Family & Friends</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group" id="editTxnDueDateGroup">
+          <label>Due Date</label>
+          <input type="date" id="editTxnDueDate" />
+        </div>
+        <div class="form-group">
+          <label>Note</label>
+          <input type="text" id="editTxnNote" placeholder="Optional description" />
+        </div>
+        <div class="form-group">
+          <label>Reason for Edit *</label>
+          <input type="text" id="editTxnReason" placeholder="e.g. Corrected wrong amount entry" required />
+        </div>
+        <div id="editTxnError" class="error-msg hidden"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="editTxnCancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="editTxnSaveBtn">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- REVERSE TXN MODAL -->
+  <div class="modal-overlay hidden" id="reverseTxnModal">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h3>Reverse Transaction</h3>
+        <button class="modal-close" id="reverseTxnModalClose">&times;</button>
+      </div>
+      <form id="reverseTxnForm" class="modal-form">
+        <input type="hidden" id="reverseTxnId" />
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 6px;">
+          Are you sure you want to reverse this transaction? Its balance effect will be nullified.
+        </p>
+        <div class="form-group">
+          <label>Reason for Reversal *</label>
+          <input type="text" id="reverseTxnReason" placeholder="e.g. Order cancelled, double entry" required />
+        </div>
+        <div id="reverseTxnError" class="error-msg hidden"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="reverseTxnCancel">Cancel</button>
+          <button type="submit" class="btn btn-red" id="reverseTxnSubmitBtn">Reverse</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- INSTALLMENTS TIMELINE & SETUP MODAL -->
+  <div class="modal-overlay hidden" id="installmentsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Installment Plans</h3>
+        <button class="modal-close" id="instModalClose">&times;</button>
+      </div>
+      <div class="modal-form" style="max-height: 80vh; overflow-y: auto;">
+        <input type="hidden" id="instTxnId" />
+        <input type="hidden" id="instTxnAmount" />
+        
+        <div class="installment-timeline-container hidden" id="instTimelineSection">
+          <div class="installment-timeline-header">
+            <span class="installment-timeline-title">Current Installment Timeline</span>
+          </div>
+          <div class="installment-timeline-steps" id="instTimelineSteps">
+            <!-- Timeline injected here -->
+          </div>
+        </div>
+
+        <form id="instForm">
+          <h4 style="margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid var(--border); padding-bottom: 4px; color: var(--text-secondary);">Set/Reset Installment Plan</h4>
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label>Plan Type</label>
+            <select id="instPlanType" required>
+              <option value="weekly">Weekly Plan</option>
+              <option value="monthly">Monthly Plan</option>
+              <option value="custom">Custom (Specify dates & amounts)</option>
+            </select>
+          </div>
+          <div id="instAutoFields">
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label>Number of Installments</label>
+              <input type="number" id="instCount" min="2" max="24" value="3" />
+            </div>
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label>Start Date</label>
+              <input type="date" id="instStartDate" />
+            </div>
+          </div>
+          <div id="instCustomFields" class="hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">Custom Splitting</label>
+              <button type="button" class="btn btn-sm btn-outline" id="btnCustomAddRow">+ Add Installment</button>
+            </div>
+            <div id="instCustomRows" style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; padding-right: 4px;">
+              <!-- Custom installment rows go here -->
+            </div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px; text-align: right;" id="instCustomSumText">
+              Total: ₹0.00 / ₹0.00
+            </div>
+          </div>
+          <div id="instError" class="error-msg hidden" style="margin-top: 10px;"></div>
+          <div class="modal-actions" style="margin-top: 16px;">
+            <button type="button" class="btn btn-outline" id="instCancel">Close</button>
+            <button type="submit" class="btn btn-primary" id="instSaveBtn">Apply Plan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <script src="../js/app.js"></script>
   <script>
+    let currentPage = 1;
+    let currentLimit = 10;
+    let currentSortBy = 'date';
+    let currentSortOrder = 'DESC';
+    let searchDebounceTimer = null;
+
     async function populateCustomerDropdowns() {
       try {
         const customers = await getCustomers();
@@ -130,61 +313,222 @@
       }
     }
 
-    async function renderTransactions() {
-      const body = document.getElementById('txnTableBody');
-      body.innerHTML = '<tr><td colspan="5" class="empty-row">Loading...</td></tr>';
-      try {
-        const params = {};
-        const cFilter = document.getElementById('filterCustomer').value;
-        const tFilter = document.getElementById('filterType').value;
-        const dFilter = document.getElementById('filterDate').value;
-        if (cFilter) params.customerId = cFilter;
-        if (tFilter) params.type       = tFilter;
-        if (dFilter) params.date       = dFilter;
+    function toggleSort(col) {
+      if (currentSortBy === col) {
+        currentSortOrder = currentSortOrder === 'ASC' ? 'DESC' : 'ASC';
+      } else {
+        currentSortBy = col;
+        currentSortOrder = 'ASC';
+      }
+      
+      // Update visual indicators
+      ['customerName', 'amount', 'date'].forEach(c => {
+        const indicator = document.getElementById('sort_' + c);
+        if (indicator) {
+          if (c === currentSortBy) {
+            indicator.textContent = currentSortOrder === 'ASC' ? ' ▲' : ' ▼';
+          } else {
+            indicator.textContent = '';
+          }
+        }
+      });
 
-        const txns = await getTransactions(params);
-        body.innerHTML = txns.length === 0
-          ? '<tr><td colspan="5" class="empty-row">No transactions found</td></tr>'
-          : txns.map(t => `
-              <tr>
-                <td><b>${escHtml(t.customerName)}</b></td>
-                <td><span class="badge ${t.type === 'credit' ? 'badge-red' : 'badge-green'}">${t.type}</span></td>
-                <td class="${t.type === 'credit' ? 'amount-due' : 'amount-paid'}">
-                  ${t.type === 'credit' ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN')}
-                </td>
-                <td>${t.date}</td>
-                <td class="note-cell">${escHtml(t.note || '—')}</td>
-              </tr>`).join('');
-      } catch (err) {
-        body.innerHTML = `<tr><td colspan="5" class="empty-row">Error: ${err.message}</td></tr>`;
+      renderTransactions();
+    }
+
+    function showSkeleton(cols = 6, rows = 5) {
+      const body = document.getElementById('txnTableBody');
+      body.innerHTML = Array(rows).fill(0).map(() => `
+        <tr class="skeleton-row">
+          ${Array(cols).fill(0).map((_, idx) => `
+            <td><div class="skeleton-text ${idx === 0 ? 'medium' : idx === 4 ? 'medium' : idx === 2 ? 'short' : ''}"></div></td>
+          `).join('')}
+        </tr>
+      `).join('');
+    }
+
+    function getDueDateBadge(dueDate, remainingAmount, status, isPersonal) {
+      if (!dueDate || parseFloat(remainingAmount) <= 0 || status === 'reversed') return '';
+      const todayStr = new Date().toISOString().split('T')[0];
+      const today = new Date(todayStr);
+      const due = new Date(dueDate);
+      const diffTime = due - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      const label = isPersonal ? 'Lent Due' : 'Due';
+
+      if (diffDays < 0) {
+        return `<span class="due-badge-small overdue">${label}: ${dueDate} (${Math.abs(diffDays)}d overdue)</span>`;
+      } else if (diffDays <= 3) {
+        return `<span class="due-badge-small upcoming">${label}: ${dueDate} (in ${diffDays}d)</span>`;
+      } else {
+        return `<span class="due-badge-small future">${label}: ${dueDate}</span>`;
       }
     }
 
-    // Filters
-    ['filterCustomer','filterType','filterDate'].forEach(id => {
-      document.getElementById(id).addEventListener('change', renderTransactions);
+    async function renderTransactions() {
+      showSkeleton();
+      try {
+        const params = {
+          page: currentPage,
+          limit: currentLimit,
+          sortBy: currentSortBy,
+          sortOrder: currentSortOrder
+        };
+
+        const cFilter = document.getElementById('filterCustomer').value;
+        const tFilter = document.getElementById('filterType').value;
+        const dFilter = document.getElementById('filterDate').value;
+        const sFilter = document.getElementById('filterSearch').value.trim();
+
+        if (cFilter) params.customerId = cFilter;
+        if (tFilter) params.type       = tFilter;
+        if (dFilter) params.date       = dFilter;
+        if (sFilter) params.search     = sFilter;
+
+        const res = await getTransactions(params);
+        const isPersonal = window.currentUserType === 'personal';
+
+        const body = document.getElementById('txnTableBody');
+        body.innerHTML = '';
+
+        if (!res.data || res.data.length === 0) {
+          body.innerHTML = '<tr><td colspan="6" class="empty-row">No transactions found</td></tr>';
+          updatePagination(0, 0, 0);
+          return;
+        }
+
+        body.innerHTML = res.data.map(t => {
+          const isReversed = t.status === 'reversed';
+          const dueBadge = t.type === 'credit' ? getDueDateBadge(t.dueDate, t.remainingAmount, t.status, isPersonal) : '';
+          const categoryBadge = t.category ? `<span class="category-badge">${escHtml(t.category)}</span>` : '';
+          
+          let detailsText = escHtml(t.note || '—');
+          if (t.editedAt) {
+            detailsText += `<div class="edit-reason-text">Edited ${new Date(t.editedAt).toLocaleDateString('en-IN')} (Reason: ${escHtml(t.editReason || '—')})</div>`;
+          }
+          if (isReversed) {
+            detailsText += `<div class="reversal-reason-text">Reversal Reason: ${escHtml(t.reversalReason || '—')}</div>`;
+          }
+
+          // Action column buttons
+          let actionButtons = '';
+          if (isReversed) {
+            actionButtons = `<button class="btn btn-sm btn-green" onclick="unreverseTransaction(${t.id})">Restore</button>`;
+          } else {
+            actionButtons = `
+              <button class="btn btn-sm btn-outline" style="padding: 4px 8px; font-size: 11px;" onclick="openEditTxnModal(${t.id}, '${t.type}', ${t.amount}, '${t.dueDate || ''}', '${t.category || ''}', '${escHtml(t.note || '')}')">Edit</button>
+              <button class="btn btn-sm btn-red" style="padding: 4px 8px; font-size: 11px; margin-left: 4px;" onclick="openReverseTxnModal(${t.id})">Reverse</button>
+              ${t.type === 'credit' ? `<button class="btn btn-sm btn-primary" style="padding: 4px 8px; font-size: 11px; margin-left: 4px;" onclick="openInstallmentsModal(${t.id}, ${t.amount})">Installments</button>` : ''}
+            `;
+          }
+
+          return `
+            <tr class="${isReversed ? 'reversed-row' : ''}">
+              <td><b>${escHtml(t.customerName)}</b></td>
+              <td>
+                <span class="badge ${isReversed ? 'badge-reversed' : (t.type === 'credit' ? 'badge-red' : 'badge-green')}">
+                  ${isReversed ? 'reversed' : getTxnTypeName(t.type, window.currentUserType)}
+                </span>
+              </td>
+              <td class="${isReversed ? '' : (t.type === 'credit' ? 'amount-due' : 'amount-paid')}">
+                ${t.type === 'credit' ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN')}
+              </td>
+              <td>${t.date}</td>
+              <td>
+                <div class="note-cell">${detailsText}</div>
+                <div style="margin-top: 4px;">${dueBadge}${categoryBadge}</div>
+              </td>
+              <td><div style="display: flex;">${actionButtons}</div></td>
+            </tr>`;
+        }).join('');
+
+        updatePagination(res.total, res.page, res.totalPages);
+      } catch (err) {
+        document.getElementById('txnTableBody').innerHTML = `<tr><td colspan="6" class="empty-row">Error: ${err.message}</td></tr>`;
+      }
+    }
+
+    function updatePagination(total, page, totalPages) {
+      const start = total === 0 ? 0 : (page - 1) * currentLimit + 1;
+      const end = Math.min(page * currentLimit, total);
+      
+      document.getElementById('paginationInfo').textContent = `Showing ${start}-${end} of ${total} entries`;
+      
+      const prevBtn = document.getElementById('paginationPrev');
+      const nextBtn = document.getElementById('paginationNext');
+      
+      prevBtn.disabled = page <= 1;
+      nextBtn.disabled = page >= totalPages;
+      
+      currentPage = page;
+    }
+
+    // Pagination Listeners
+    document.getElementById('paginationPrev').addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        renderTransactions();
+      }
     });
-    document.getElementById('clearFilters').addEventListener('click', () => {
-      ['filterCustomer','filterType','filterDate'].forEach(id => {
-        document.getElementById(id).value = '';
-      });
+
+    document.getElementById('paginationNext').addEventListener('click', () => {
+      currentPage++;
       renderTransactions();
     });
 
-    // Modal
+    document.getElementById('paginationLimit').addEventListener('change', function() {
+      currentLimit = parseInt(this.value);
+      currentPage = 1;
+      renderTransactions();
+    });
+
+    // Filters Listeners
+    ['filterCustomer', 'filterType', 'filterDate'].forEach(id => {
+      document.getElementById(id).addEventListener('change', () => {
+        currentPage = 1;
+        renderTransactions();
+      });
+    });
+
+    document.getElementById('filterSearch').addEventListener('input', function() {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        currentPage = 1;
+        renderTransactions();
+      }, 300);
+    });
+
+    document.getElementById('clearFilters').addEventListener('click', () => {
+      ['filterCustomer','filterType','filterDate','filterSearch'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      currentPage = 1;
+      renderTransactions();
+    });
+
+    // ADD TXN MODAL HANDLERS
     document.getElementById('addTxnBtn').addEventListener('click', () => {
       document.getElementById('txnForm').reset();
       document.getElementById('txnDate').value = new Date().toISOString().split('T')[0];
       document.getElementById('txnError').classList.add('hidden');
       document.getElementById('txnModal').classList.remove('hidden');
     });
+
+    document.getElementById('txnType').addEventListener('change', function() {
+      const dueGroup = document.getElementById('txnDueDateGroup');
+      if (this.value === 'credit') {
+        dueGroup.classList.remove('hidden');
+      } else {
+        dueGroup.classList.add('hidden');
+        document.getElementById('txnDueDate').value = '';
+      }
+    });
+
     document.getElementById('txnModalClose').addEventListener('click', () =>
       document.getElementById('txnModal').classList.add('hidden'));
     document.getElementById('txnCancel').addEventListener('click', () =>
       document.getElementById('txnModal').classList.add('hidden'));
-    document.getElementById('txnModal').addEventListener('click', function(e) {
-      if (e.target === this) this.classList.add('hidden');
-    });
 
     document.getElementById('txnForm').addEventListener('submit', async function(e) {
       e.preventDefault();
@@ -199,8 +543,11 @@
           amount:     parseFloat(document.getElementById('txnAmount').value),
           date:       document.getElementById('txnDate').value,
           note:       document.getElementById('txnNote').value.trim(),
+          category:   document.getElementById('txnCategory').value || null,
+          dueDate:    document.getElementById('txnDueDate').value || null,
         });
         document.getElementById('txnModal').classList.add('hidden');
+        updateOverdueBadge();
         renderTransactions();
       } catch (ex) {
         err.textContent = ex.message;
@@ -210,8 +557,300 @@
       }
     });
 
+    // EDIT TXN MODAL HANDLERS
+    function openEditTxnModal(id, type, amount, dueDate, category, note) {
+      document.getElementById('editTxnForm').reset();
+      document.getElementById('editTxnId').value = id;
+      document.getElementById('editTxnType').value = type;
+      document.getElementById('editTxnAmount').value = amount;
+      document.getElementById('editTxnCategory').value = category || '';
+      document.getElementById('editTxnDueDate').value = dueDate ? dueDate.split('T')[0] : '';
+      document.getElementById('editTxnNote').value = note;
+      document.getElementById('editTxnReason').value = '';
+
+      const dueGroup = document.getElementById('editTxnDueDateGroup');
+      if (type === 'credit') {
+        dueGroup.classList.remove('hidden');
+      } else {
+        dueGroup.classList.add('hidden');
+      }
+
+      document.getElementById('editTxnError').classList.add('hidden');
+      document.getElementById('editTxnModal').classList.remove('hidden');
+    }
+
+    document.getElementById('editTxnType').addEventListener('change', function() {
+      const dueGroup = document.getElementById('editTxnDueDateGroup');
+      if (this.value === 'credit') {
+        dueGroup.classList.remove('hidden');
+      } else {
+        dueGroup.classList.add('hidden');
+        document.getElementById('editTxnDueDate').value = '';
+      }
+    });
+
+    document.getElementById('editTxnModalClose').addEventListener('click', () =>
+      document.getElementById('editTxnModal').classList.add('hidden'));
+    document.getElementById('editTxnCancel').addEventListener('click', () =>
+      document.getElementById('editTxnModal').classList.add('hidden'));
+
+    document.getElementById('editTxnForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const id = document.getElementById('editTxnId').value;
+      const btn = document.getElementById('editTxnSaveBtn');
+      const err = document.getElementById('editTxnError');
+      err.classList.add('hidden');
+      btn.disabled = true; btn.textContent = 'Saving...';
+      try {
+        await apiFetch(`/api/transactions/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            type:       document.getElementById('editTxnType').value,
+            amount:     parseFloat(document.getElementById('editTxnAmount').value),
+            category:   document.getElementById('editTxnCategory').value || null,
+            dueDate:    document.getElementById('editTxnDueDate').value || null,
+            note:       document.getElementById('editTxnNote').value.trim(),
+            editReason: document.getElementById('editTxnReason').value.trim()
+          })
+        });
+        document.getElementById('editTxnModal').classList.add('hidden');
+        updateOverdueBadge();
+        renderTransactions();
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove('hidden');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Save Changes';
+      }
+    });
+
+    // REVERSE TXN MODAL HANDLERS
+    function openReverseTxnModal(id) {
+      document.getElementById('reverseTxnForm').reset();
+      document.getElementById('reverseTxnId').value = id;
+      document.getElementById('reverseTxnError').classList.add('hidden');
+      document.getElementById('reverseTxnModal').classList.remove('hidden');
+    }
+
+    document.getElementById('reverseTxnModalClose').addEventListener('click', () =>
+      document.getElementById('reverseTxnModal').classList.add('hidden'));
+    document.getElementById('reverseTxnCancel').addEventListener('click', () =>
+      document.getElementById('reverseTxnModal').classList.add('hidden'));
+
+    document.getElementById('reverseTxnForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const id = document.getElementById('reverseTxnId').value;
+      const btn = document.getElementById('reverseTxnSubmitBtn');
+      const err = document.getElementById('reverseTxnError');
+      err.classList.add('hidden');
+      btn.disabled = true; btn.textContent = 'Reversing...';
+      try {
+        await apiFetch(`/api/transactions/${id}/reverse`, {
+          method: 'POST',
+          body: JSON.stringify({
+            reason: document.getElementById('reverseTxnReason').value.trim()
+          })
+        });
+        document.getElementById('reverseTxnModal').classList.add('hidden');
+        updateOverdueBadge();
+        renderTransactions();
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove('hidden');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Reverse';
+      }
+    });
+
+    async function unreverseTransaction(id) {
+      if (!confirm('Are you sure you want to restore this reversed transaction?')) return;
+      try {
+        await apiFetch(`/api/transactions/${id}/unreverse`, { method: 'POST' });
+        updateOverdueBadge();
+        renderTransactions();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    // INSTALLMENTS PLAN LOGIC
+    let customInstRowIndex = 0;
+
+    async function openInstallmentsModal(txnId, amount) {
+      document.getElementById('instTxnId').value = txnId;
+      document.getElementById('instTxnAmount').value = amount;
+      document.getElementById('instError').classList.add('hidden');
+      document.getElementById('instForm').reset();
+
+      // Set default start date to today
+      document.getElementById('instStartDate').value = new Date().toISOString().split('T')[0];
+
+      // Reset Custom UI
+      document.getElementById('instCustomRows').innerHTML = '';
+      document.getElementById('instCustomFields').classList.add('hidden');
+      document.getElementById('instAutoFields').classList.remove('hidden');
+      customInstRowIndex = 0;
+
+      // Fetch existing installment timeline
+      try {
+        const list = await apiFetch(`/api/installments/transaction/${txnId}`);
+        const timelineSec = document.getElementById('instTimelineSection');
+        const timelineSteps = document.getElementById('instTimelineSteps');
+        
+        if (list && list.length > 0) {
+          timelineSec.classList.remove('hidden');
+          timelineSteps.innerHTML = list.map((inst, index) => {
+            let statusBadge = 'pending';
+            if (inst.status === 'paid') statusBadge = 'paid';
+            if (inst.status === 'overdue') statusBadge = 'overdue';
+
+            return `
+              <div class="installment-step">
+                <div class="installment-dot ${statusBadge}"></div>
+                <div class="installment-step-info">
+                  <span>Installment #${index + 1}: ₹${parseFloat(inst.amount).toLocaleString('en-IN')}</span>
+                  <span class="installment-step-date">Due: ${inst.dueDate.split('T')[0]} (${inst.status})</span>
+                </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          timelineSec.classList.add('hidden');
+          timelineSteps.innerHTML = '';
+        }
+      } catch (err) {
+        console.error('Failed to load installment timeline', err);
+      }
+
+      document.getElementById('installmentsModal').classList.remove('hidden');
+    }
+
+    document.getElementById('instPlanType').addEventListener('change', function() {
+      const type = this.value;
+      if (type === 'custom') {
+        document.getElementById('instAutoFields').classList.add('hidden');
+        document.getElementById('instCustomFields').classList.remove('hidden');
+        // Pre-create 2 custom rows
+        if (document.getElementById('instCustomRows').children.length === 0) {
+          addCustomInstallmentRow();
+          addCustomInstallmentRow();
+        }
+        recalculateCustomSum();
+      } else {
+        document.getElementById('instAutoFields').classList.remove('hidden');
+        document.getElementById('instCustomFields').classList.add('hidden');
+      }
+    });
+
+    function addCustomInstallmentRow() {
+      const container = document.getElementById('instCustomRows');
+      const index = customInstRowIndex++;
+      const row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.gap = '6px';
+      row.style.alignItems = 'center';
+      row.id = `custom_inst_row_${index}`;
+
+      row.innerHTML = `
+        <input type="date" class="custom-inst-date" required style="flex: 1; padding: 6px;" />
+        <input type="number" class="custom-inst-amount" placeholder="Amount (₹)" min="1" required style="flex: 1; padding: 6px;" oninput="recalculateCustomSum()" />
+        <button type="button" class="btn btn-sm btn-red" style="padding: 6px;" onclick="removeCustomInstallmentRow(${index})">&times;</button>
+      `;
+      container.appendChild(row);
+    }
+
+    function removeCustomInstallmentRow(index) {
+      const row = document.getElementById(`custom_inst_row_${index}`);
+      if (row) {
+        row.remove();
+        recalculateCustomSum();
+      }
+    }
+
+    function recalculateCustomSum() {
+      const amounts = document.querySelectorAll('.custom-inst-amount');
+      let sum = 0;
+      amounts.forEach(input => {
+        sum += parseFloat(input.value) || 0;
+      });
+
+      const total = parseFloat(document.getElementById('instTxnAmount').value);
+      const text = document.getElementById('instCustomSumText');
+      text.textContent = `Total: ₹${sum.toFixed(2)} / ₹${total.toFixed(2)}`;
+      
+      if (Math.abs(sum - total) > 0.01) {
+        text.style.color = 'var(--red)';
+      } else {
+        text.style.color = 'var(--green)';
+      }
+    }
+
+    document.getElementById('btnCustomAddRow').addEventListener('click', addCustomInstallmentRow);
+
+    document.getElementById('instModalClose').addEventListener('click', () =>
+      document.getElementById('installmentsModal').classList.add('hidden'));
+    document.getElementById('instCancel').addEventListener('click', () =>
+      document.getElementById('installmentsModal').classList.add('hidden'));
+
+    document.getElementById('instForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const txnId = document.getElementById('instTxnId').value;
+      const planType = document.getElementById('instPlanType').value;
+      const btn = document.getElementById('instSaveBtn');
+      const err = document.getElementById('instError');
+      err.classList.add('hidden');
+      btn.disabled = true; btn.textContent = 'Saving Plan...';
+
+      const payload = {
+        planType
+      };
+
+      if (planType === 'custom') {
+        const rows = document.getElementById('instCustomRows').children;
+        const customInstallments = [];
+        for (const row of rows) {
+          const date = row.querySelector('.custom-inst-date').value;
+          const amount = parseFloat(row.querySelector('.custom-inst-amount').value);
+          if (!date || !amount) {
+            err.textContent = 'Each installment must have a date and amount.';
+            err.classList.remove('hidden');
+            btn.disabled = false; btn.textContent = 'Apply Plan';
+            return;
+          }
+          customInstallments.push({ dueDate: date, amount });
+        }
+        payload.customInstallments = customInstallments;
+      } else {
+        payload.installmentsCount = parseInt(document.getElementById('instCount').value);
+        payload.startDate = document.getElementById('instStartDate').value;
+      }
+
+      try {
+        await apiFetch(`/api/installments/transaction/${txnId}`, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        document.getElementById('installmentsModal').classList.add('hidden');
+        updateOverdueBadge();
+        renderTransactions();
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove('hidden');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Apply Plan';
+      }
+    });
+
+    // INIT
     requireAuth().then(async () => {
       await populateCustomerDropdowns();
+      
+      const params = new URLSearchParams(window.location.search);
+      const cId = params.get('customerId');
+      if (cId) {
+        document.getElementById('filterCustomer').value = cId;
+      }
+      
       renderTransactions();
     });
   </script>

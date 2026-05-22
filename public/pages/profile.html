@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniKhata — Profile</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-left">
+      <button class="hamburger" id="menuToggle">&#9776;</button>
+      <span class="nav-logo">₹ MiniKhata</span>
+    </div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn btn-sm btn-outline" id="logoutBtn">Logout</button>
+    </div>
+  </nav>
+
+  <div class="sidebar" id="sidebar">
+    <ul class="sidebar-menu">
+      <li><a href="dashboard.html" id="linkDashboard">&#9632; Dashboard</a></li>
+      <li><a href="customers.html" id="linkCustomers">&#128101; Customers</a></li>
+      <li><a href="transactions.html" id="linkTransactions">&#128196; Transactions</a></li>
+      <li><a href="overdue.html" id="linkOverdue">&#9888; Overdue <span id="overdueBadge" class="badge badge-red hidden">0</span></a></li>
+      <li><a href="reports.html" id="linkReports">&#128200; Reports</a></li>
+      <li><a href="profile.html" class="active" id="linkProfile">&#128100; Profile</a></li>
+    </ul>
+  </div>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h2 class="page-title">Profile Settings</h2>
+        <span class="page-sub">Manage your account configurations</span>
+      </div>
+    </div>
+
+    <div class="card" style="max-width: 500px;">
+      <div class="card-header"><h3>Account Settings</h3></div>
+      <div style="padding: 24px;">
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label>Username</label>
+          <input type="text" id="profUsername" disabled style="background: rgba(255,255,255,0.03); border-color: var(--border-light);" />
+        </div>
+
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label>Ledger Account Type</label>
+          <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
+            Switching your account type updates ledger terminology (e.g., Personal uses "People" & "Lendings", Business uses "Customers" & "Transactions").
+          </p>
+          <select id="profUserType" class="filter-select" style="width: 100%; height: 42px; border-radius: var(--radius-sm);">
+            <option value="personal">👤 Personal (Lendings & Friends)</option>
+            <option value="business">💼 Business (Customers & Dues)</option>
+          </select>
+        </div>
+
+        <div id="profError" class="error-msg hidden" style="margin-bottom: 16px;"></div>
+        <div id="profSuccess" class="badge badge-green hidden" style="margin-bottom: 16px; padding: 10px; width: 100%; text-align: center; border-radius: 6px;">Settings saved successfully!</div>
+
+        <button class="btn btn-primary btn-full" id="saveProfileBtn">Save Changes</button>
+      </div>
+    </div>
+
+    <div class="card" style="max-width: 500px; margin-top: 24px;">
+      <div class="card-header"><h3>Backup & Restore</h3></div>
+      <div style="padding: 24px;">
+        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 20px;">
+          Export your entire ledger data as a JSON file, or restore it from a previous backup.
+        </p>
+
+        <div style="margin-bottom: 20px;">
+          <button class="btn btn-outline btn-full" id="exportBackupBtn">⬇️ Export Ledger Backup</button>
+        </div>
+
+        <div style="border-top: 1px solid var(--border-light); padding-top: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500; font-size: 14px;">Restore from Backup</label>
+          <div style="position: relative; margin-bottom: 16px;">
+            <input type="file" id="restoreFileInput" accept=".json" style="display: none;" />
+            <button class="btn btn-secondary btn-full" id="selectFileBtn" style="background: rgba(255,255,255,0.05); border: 1px dashed var(--border-light);">📁 Select Backup File</button>
+            <div id="selectedFileName" style="font-size: 11px; color: var(--text-secondary); margin-top: 8px; text-align: center;">No file selected</div>
+          </div>
+          
+          <button class="btn btn-primary btn-full" id="restoreBackupBtn" disabled>⬆️ Restore Database</button>
+        </div>
+
+        <div id="backupError" class="error-msg hidden" style="margin-top: 16px;"></div>
+        <div id="backupSuccess" class="badge badge-green hidden" style="margin-top: 16px; padding: 10px; width: 100%; text-align: center; border-radius: 6px;"></div>
+      </div>
+    </div>
+
+    <!-- Delete Account Card -->
+    <div class="card" style="max-width: 500px; margin-top: 24px; border-color: rgba(244, 63, 94, 0.3);">
+      <div class="card-header" style="background: rgba(244, 63, 94, 0.05); border-bottom-color: rgba(244, 63, 94, 0.2);">
+        <h3 style="color: var(--red);">Delete Account</h3>
+      </div>
+      <div style="padding: 24px;">
+        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 20px;">
+          Permanently delete your account and all associated customer ledger data, transactions, and settings. This action is irreversible.
+        </p>
+
+        <button class="btn btn-red btn-full" id="deleteAccountBtn">Delete Account</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/app.js"></script>
+  <script>
+    async function initProfile() {
+      await requireAuth();
+
+      // Set user info
+      document.getElementById('profUsername').value = document.getElementById('navUser').textContent;
+      document.getElementById('profUserType').value = window.currentUserType;
+    }
+
+    document.getElementById('saveProfileBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('saveProfileBtn');
+      const err = document.getElementById('profError');
+      const success = document.getElementById('profSuccess');
+      
+      err.classList.add('hidden');
+      success.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = 'Saving Changes...';
+
+      const type = document.getElementById('profUserType').value;
+
+      try {
+        await apiFetch('/api/auth/user-type', {
+          method: 'POST',
+          body: JSON.stringify({ userType: type }),
+        });
+        success.classList.remove('hidden');
+        
+        // Update user type state
+        window.currentUserType = type;
+        adaptUI(type);
+        updateOverdueBadge();
+        
+        // Let user see success briefly then reload to ensure full UI terminology is synced
+        setTimeout(() => window.location.reload(), 800);
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+      }
+    });
+
+    // Backup & Restore Handlers
+    document.getElementById('exportBackupBtn').addEventListener('click', async () => {
+      const err = document.getElementById('backupError');
+      const success = document.getElementById('backupSuccess');
+      err.classList.add('hidden');
+      success.classList.add('hidden');
+      
+      try {
+        const res = await fetch('/api/backup/export', { credentials: 'include' });
+        if (!res.ok) {
+          throw new Error('Failed to export backup');
+        }
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `minikhata_backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        success.textContent = 'Backup exported successfully!';
+        success.classList.remove('hidden');
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove('hidden');
+      }
+    });
+
+    const selectFileBtn = document.getElementById('selectFileBtn');
+    const fileInput = document.getElementById('restoreFileInput');
+    const fileNameDiv = document.getElementById('selectedFileName');
+    const restoreBtn = document.getElementById('restoreBackupBtn');
+    
+    selectFileBtn.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        fileNameDiv.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+        restoreBtn.disabled = false;
+      } else {
+        fileNameDiv.textContent = 'No file selected';
+        restoreBtn.disabled = true;
+      }
+    });
+
+    restoreBtn.addEventListener('click', async () => {
+      if (fileInput.files.length === 0) return;
+      
+      const file = fileInput.files[0];
+      const err = document.getElementById('backupError');
+      const success = document.getElementById('backupSuccess');
+      
+      err.classList.add('hidden');
+      success.classList.add('hidden');
+      restoreBtn.disabled = true;
+      restoreBtn.textContent = 'Restoring Database...';
+      
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const json = JSON.parse(e.target.result);
+          
+          const result = await apiFetch('/api/backup/restore', {
+            method: 'POST',
+            body: JSON.stringify(json),
+          });
+          
+          success.textContent = 'Database restored successfully! Reloading...';
+          success.classList.remove('hidden');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } catch (ex) {
+          err.textContent = ex.message;
+          err.classList.remove('hidden');
+          restoreBtn.disabled = false;
+          restoreBtn.textContent = '⬆️ Restore Database';
+        }
+      };
+      reader.onerror = () => {
+        err.textContent = 'Error reading file';
+        err.classList.remove('hidden');
+        restoreBtn.disabled = false;
+        restoreBtn.textContent = '⬆️ Restore Database';
+      };
+      reader.readAsText(file);
+    });
+
+    // Account Deletion Handlers
+    function showDeleteWarningModal() {
+      const username = document.getElementById('profUsername').value;
+      const overlay = document.createElement('div');
+      overlay.id = 'deleteWarningModalOverlay';
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML = `
+        <div class="modal modal-sm" style="border-color: var(--red);">
+          <div class="modal-header" style="background: rgba(244, 63, 94, 0.05); border-bottom-color: rgba(244, 63, 94, 0.2);">
+            <h3 style="color: var(--red);">⚠️ Warning</h3>
+          </div>
+          <div class="modal-form">
+            <p style="font-size: 13px; color: var(--text-primary); text-align: center; margin-bottom: 10px;">
+              You are about to permanently delete your account. This action will erase all of your customer records, transaction histories, payments, and settings.
+            </p>
+            <p style="font-size: 13px; color: var(--red); text-align: center; font-weight: 600; margin-bottom: 10px;">
+              This cannot be undone!
+            </p>
+            <div class="modal-actions" style="margin-top: 10px;">
+              <button class="btn btn-outline" id="warningCancelBtn" style="flex: 1;">Cancel</button>
+              <button class="btn btn-red" id="warningConfirmBtn" style="flex: 1;">Proceed</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      document.getElementById('warningCancelBtn').addEventListener('click', () => {
+        overlay.remove();
+      });
+
+      document.getElementById('warningConfirmBtn').addEventListener('click', () => {
+        overlay.remove();
+        showDeleteConfirmModal(username);
+      });
+    }
+
+    function showDeleteConfirmModal(username) {
+      const overlay = document.createElement('div');
+      overlay.id = 'deleteConfirmModalOverlay';
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML = `
+        <div class="modal modal-sm" style="border-color: var(--red);">
+          <div class="modal-header" style="background: rgba(244, 63, 94, 0.05); border-bottom-color: rgba(244, 63, 94, 0.2);">
+            <h3 style="color: var(--red);">Confirm Deletion</h3>
+          </div>
+          <div class="modal-form">
+            <p style="font-size: 13px; color: var(--text-secondary); text-align: center; margin-bottom: 10px;">
+              To confirm, please type your username <b style="color: var(--text-primary); font-size: 14px;">${username}</b> below.
+            </p>
+            <div class="form-group">
+              <input type="text" id="confirmUsernameInput" placeholder="Type username here" autocomplete="off" style="text-align: center; font-weight: 600;" />
+            </div>
+            <div id="deleteModalError" class="error-msg hidden"></div>
+            <div class="modal-actions" style="margin-top: 10px;">
+              <button class="btn btn-outline" id="confirmCancelBtn" style="flex: 1;">Cancel</button>
+              <button class="btn btn-red" id="finalDeleteBtn" style="flex: 1;" disabled>Permanently Delete</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      const confirmInput = document.getElementById('confirmUsernameInput');
+      const finalBtn = document.getElementById('finalDeleteBtn');
+      const errEl = document.getElementById('deleteModalError');
+
+      confirmInput.addEventListener('input', () => {
+        if (confirmInput.value.trim() === username) {
+          finalBtn.disabled = false;
+        } else {
+          finalBtn.disabled = true;
+        }
+      });
+
+      document.getElementById('confirmCancelBtn').addEventListener('click', () => {
+        overlay.remove();
+      });
+
+      finalBtn.addEventListener('click', async () => {
+        finalBtn.disabled = true;
+        finalBtn.textContent = 'Deleting...';
+        errEl.classList.add('hidden');
+
+        try {
+          const res = await fetch('/api/auth/account', {
+            method: 'DELETE',
+            credentials: 'include'
+          });
+          if (res.ok) {
+            overlay.remove();
+            // Redirect to login page
+            window.location.href = '/index.html';
+          } else {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || 'Server error deleting account');
+          }
+        } catch (e) {
+          errEl.textContent = e.message;
+          errEl.classList.remove('hidden');
+          finalBtn.disabled = false;
+          finalBtn.textContent = 'Permanently Delete';
+        }
+      });
+    }
+
+    document.getElementById('deleteAccountBtn').addEventListener('click', () => {
+      showDeleteWarningModal();
+    });
+
+    initProfile();
+  </script>
+</body>
+</html>

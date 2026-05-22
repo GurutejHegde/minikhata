@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniKhata — Reports</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-left">
+      <button class="hamburger" id="menuToggle">&#9776;</button>
+      <span class="nav-logo">₹ MiniKhata</span>
+    </div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn btn-sm btn-outline" id="logoutBtn">Logout</button>
+    </div>
+  </nav>
+
+  <div class="sidebar" id="sidebar">
+    <ul class="sidebar-menu">
+      <li><a href="dashboard.html" id="linkDashboard">&#9632; Dashboard</a></li>
+      <li><a href="customers.html" id="linkCustomers">&#128101; Customers</a></li>
+      <li><a href="transactions.html" id="linkTransactions">&#128196; Transactions</a></li>
+      <li><a href="overdue.html" id="linkOverdue">&#9888; Overdue <span id="overdueBadge" class="badge badge-red hidden">0</span></a></li>
+      <li><a href="reports.html" class="active" id="linkReports">&#128200; Reports</a></li>
+      <li><a href="profile.html" id="linkProfile">&#128100; Profile</a></li>
+    </ul>
+  </div>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h2 class="page-title" id="reportsTitle">Ledger Reports</h2>
+        <span class="page-sub">Monthly credit and payments analytics</span>
+      </div>
+    </div>
+
+    <!-- Date selector bar -->
+    <div class="filter-bar">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label style="font-size: 13px; font-weight: 600; color: var(--text-secondary)">From:</label>
+        <input type="date" id="reportFrom" class="filter-select" />
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label style="font-size: 13px; font-weight: 600; color: var(--text-secondary)">To:</label>
+        <input type="date" id="reportTo" class="filter-select" />
+      </div>
+      <button class="btn btn-primary btn-sm" id="applyReportFilters">Apply Filter</button>
+    </div>
+
+    <!-- Summary Stats Grid -->
+    <div class="stats-grid" style="margin-top: 20px;">
+      <div class="stat-card stat-blue">
+        <div class="stat-label" id="lblTotalGiven">Total Given</div>
+        <div class="stat-value" id="valTotalGiven">₹0</div>
+      </div>
+      <div class="stat-card stat-green">
+        <div class="stat-label" id="lblTotalCollected">Total Collected</div>
+        <div class="stat-value" id="valTotalCollected">₹0</div>
+      </div>
+      <div class="stat-card stat-red">
+        <div class="stat-label" id="lblTotalOutstanding">Total Outstanding</div>
+        <div class="stat-value" id="valTotalOutstanding">₹0</div>
+      </div>
+    </div>
+
+    <!-- Chart Card -->
+    <div class="card" style="margin-top: 24px;">
+      <div class="card-header"><h3 id="chartTitle">Monthly Credit Given vs Payment Received</h3></div>
+      <div style="padding: 24px;">
+        <div class="chart-container">
+          <canvas id="monthlyChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/app.js"></script>
+  <script>
+    let myChart = null;
+
+    async function loadReports() {
+      await requireAuth();
+
+      const isPersonal = window.currentUserType === 'personal';
+      
+      // Adapt terminology
+      document.getElementById('lblTotalGiven').textContent = isPersonal ? 'Total Lent' : 'Total Given';
+      document.getElementById('lblTotalCollected').textContent = isPersonal ? 'Total Repaid' : 'Total Collected';
+      document.getElementById('lblTotalOutstanding').textContent = isPersonal ? 'Total Outstanding Owed' : 'Total Outstanding';
+      document.getElementById('chartTitle').textContent = isPersonal 
+        ? 'Monthly Amount Lent vs Repayments' 
+        : 'Monthly Credit Given vs Payment Received';
+
+      // Set default date range: start of current year to today
+      const today = new Date();
+      const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
+      
+      const toStr = today.toISOString().split('T')[0];
+      const fromStr = firstDayOfYear.toISOString().split('T')[0];
+
+      const fromInput = document.getElementById('reportFrom');
+      const toInput = document.getElementById('reportTo');
+
+      if (!fromInput.value) fromInput.value = fromStr;
+      if (!toInput.value) toInput.value = toStr;
+
+      await fetchReportData();
+    }
+
+    async function fetchReportData() {
+      const from = document.getElementById('reportFrom').value;
+      const to = document.getElementById('reportTo').value;
+
+      try {
+        const { chartData, summary } = await apiFetch(`/api/reports/monthly?from=${from}&to=${to}`);
+
+        // Update stats cards
+        document.getElementById('valTotalGiven').textContent = '₹' + summary.totalGiven.toLocaleString('en-IN');
+        document.getElementById('valTotalCollected').textContent = '₹' + summary.totalCollected.toLocaleString('en-IN');
+        document.getElementById('valTotalOutstanding').textContent = '₹' + summary.totalOutstanding.toLocaleString('en-IN');
+
+        const isPersonal = window.currentUserType === 'personal';
+        renderChart(chartData, isPersonal);
+      } catch (err) {
+        console.error('Failed to load report data:', err);
+      }
+    }
+
+    function renderChart(data, isPersonal) {
+      const ctx = document.getElementById('monthlyChart').getContext('2d');
+      
+      const labels = data.map(d => d.month);
+      const credits = data.map(d => parseFloat(d.credit));
+      const payments = data.map(d => parseFloat(d.payment));
+
+      if (myChart) {
+        myChart.destroy();
+      }
+
+      // Configure Chart.js styles for dark mode
+      Chart.defaults.color = '#9CA3AF';
+      Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.08)';
+      Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+
+      myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: isPersonal ? 'Amount Lent' : 'Credit Given',
+              data: credits,
+              backgroundColor: '#F43F5E', // Rose
+              borderRadius: 4,
+            },
+            {
+              label: isPersonal ? 'Repayments' : 'Payment Received',
+              data: payments,
+              backgroundColor: '#10B981', // Emerald
+              borderRadius: 4,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                boxWidth: 12,
+                font: { weight: '500' }
+              }
+            },
+            tooltip: {
+              backgroundColor: '#151B2C',
+              titleColor: '#F9FAFB',
+              bodyColor: '#9CA3AF',
+              borderColor: 'rgba(255, 255, 255, 0.08)',
+              borderWidth: 1,
+              padding: 12,
+              callbacks: {
+                label: function(context) {
+                  let label = context.dataset.label || '';
+                  if (label) label += ': ';
+                  if (context.parsed.y !== null) {
+                    label += '₹' + context.parsed.y.toLocaleString('en-IN');
+                  }
+                  return label;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return '₹' + value.toLocaleString('en-IN');
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    document.getElementById('applyReportFilters').addEventListener('click', fetchReportData);
+
+    loadReports();
+  </script>
+</body>
+</html>

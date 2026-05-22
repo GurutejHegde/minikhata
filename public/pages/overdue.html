@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniKhata — Overdue Alerts</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-left">
+      <button class="hamburger" id="menuToggle">&#9776;</button>
+      <span class="nav-logo">₹ MiniKhata</span>
+    </div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn btn-sm btn-outline" id="logoutBtn">Logout</button>
+    </div>
+  </nav>
+
+  <div class="sidebar" id="sidebar">
+    <ul class="sidebar-menu">
+      <li><a href="dashboard.html" id="linkDashboard">&#9632; Dashboard</a></li>
+      <li><a href="customers.html" id="linkCustomers">&#128101; Customers</a></li>
+      <li><a href="transactions.html" id="linkTransactions">&#128196; Transactions</a></li>
+      <li><a href="overdue.html" class="active" id="linkOverdue">&#9888; Overdue <span id="overdueBadge" class="badge badge-red hidden">0</span></a></li>
+      <li><a href="reports.html" id="linkReports">&#128200; Reports</a></li>
+      <li><a href="profile.html" id="linkProfile">&#128100; Profile</a></li>
+    </ul>
+  </div>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h2 class="page-title" id="overdueTitle">Overdue Alerts</h2>
+        <span class="page-sub" id="overdueSub">Accounts with no payments in over 30 days</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th id="thName">Customer</th>
+              <th>Phone</th>
+              <th id="thBalance">Balance Due</th>
+              <th id="thLastPayment">Last Payment Date</th>
+              <th id="thDays">Days Idle</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="overdueTableBody">
+            <tr><td colspan="6" class="empty-row">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/app.js"></script>
+  <script>
+    async function loadOverdue() {
+      await requireAuth();
+
+      const isPersonal = window.currentUserType === 'personal';
+      
+      // Adapt page terminology
+      document.getElementById('overdueTitle').textContent = isPersonal ? 'Overdue Lendings' : 'Overdue Alerts';
+      document.getElementById('overdueSub').textContent = isPersonal 
+        ? 'People with outstanding loans and no repayment in 30+ days' 
+        : 'Customers with pending dues and no payment in 30+ days';
+      document.getElementById('thName').textContent = isPersonal ? 'Person' : 'Customer';
+      document.getElementById('thBalance').textContent = isPersonal ? 'Balance Owed' : 'Balance Due';
+      document.getElementById('thLastPayment').textContent = isPersonal ? 'Last Repayment' : 'Last Payment Date';
+      document.getElementById('thDays').textContent = 'Days Idle';
+
+      try {
+        const list = await getOverdueCustomers();
+        const body = document.getElementById('overdueTableBody');
+        
+        body.innerHTML = list.length === 0
+          ? '<tr><td colspan="6" class="empty-row">No overdue accounts. All caught up! 🎉</td></tr>'
+          : list.map(c => {
+              const lastPay = c.lastPaymentDate ? c.lastPaymentDate : 'Never Paid';
+              return `
+                <tr>
+                  <td><b>${escHtml(c.name)}</b></td>
+                  <td>${escHtml(c.phone)}</td>
+                  <td class="amount-due">₹${parseFloat(c.balance).toLocaleString('en-IN')}</td>
+                  <td><span class="badge ${c.lastPaymentDate ? 'badge-green' : 'badge-red'}">${lastPay}</span></td>
+                  <td><b style="color: var(--red)">${c.daysSinceLastPayment} days</b></td>
+                  <td><a href="customers.html?openDrawer=${c.id}" class="link-btn">Open Drawer</a></td>
+                </tr>`;
+            }).join('');
+      } catch (err) {
+        document.getElementById('overdueTableBody').innerHTML = 
+          `<tr><td colspan="6" class="empty-row">Error: ${err.message}</td></tr>`;
+      }
+    }
+
+    loadOverdue();
+  </script>
+</body>
+</html>

@@ -9,6 +9,11 @@ const session      = require('express-session');
 const authRoutes   = require('./routes/auth');
 const customerRoutes = require('./routes/customers');
 const txnRoutes    = require('./routes/transactions');
+const searchRoutes = require('./routes/search');
+const reportsRoutes = require('./routes/reports');
+const notificationRoutes = require('./routes/notifications');
+const installmentRoutes = require('./routes/installments');
+const backupRoutes = require('./routes/backup');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -37,6 +42,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/auth',         authRoutes);
 app.use('/api/customers',    customerRoutes);
 app.use('/api/transactions', txnRoutes);
+app.use('/api/search',       searchRoutes);
+app.use('/api/reports',      reportsRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/installments', installmentRoutes);
+app.use('/api/backup',       backupRoutes);
 
 // ── CATCH-ALL — serve index.html for unknown routes ───────────────────────────
 app.get('*', (req, res) => {
