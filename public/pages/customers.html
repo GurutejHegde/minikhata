@@ -581,7 +581,7 @@
                         ${isReversed ? 'reversed' : escHtml(getTxnTypeName(t.type, window.currentUserType))}
                       </span>
                       <div class="txn-amount ${isReversed ? '' : (t.type === 'credit' ? 'amount-due' : 'amount-paid')}">
-                        ${t.type === 'credit' ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN')}
+                        ${t.type === 'payment' ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN')}
                       </div>
                     </div>
                     <div class="txn-note" style="margin-top: 4px;">${detailsText}</div>
@@ -705,7 +705,7 @@
         t.date,
         getTxnTypeName(t.type, window.currentUserType),
         t.note || "—",
-        (t.type === 'credit' ? '+' : '-') + ' ' + parseFloat(t.amount).toLocaleString('en-IN')
+        (t.type === 'payment' ? '+' : '-') + ' ' + parseFloat(t.amount).toLocaleString('en-IN')
       ]);
       
       doc.autoTable({

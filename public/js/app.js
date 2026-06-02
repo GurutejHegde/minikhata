@@ -218,20 +218,20 @@ function adaptUI(userType) {
 
     const filterTypeSelect = document.getElementById('filterType');
     if (filterTypeSelect && filterTypeSelect.options[1] && filterTypeSelect.options[2]) {
-      filterTypeSelect.options[1].textContent = isPersonal ? 'Lent' : 'Borrowed';
-      filterTypeSelect.options[2].textContent = isPersonal ? 'Paid back' : 'Paid';
+      filterTypeSelect.options[1].textContent = isPersonal ? 'Lent' : 'Credit Given';
+      filterTypeSelect.options[2].textContent = isPersonal ? 'Paid Back' : 'Payment Received';
     }
 
     const modalTypeSelect = document.getElementById('txnType');
     if (modalTypeSelect && modalTypeSelect.options[1] && modalTypeSelect.options[2]) {
-      modalTypeSelect.options[1].textContent = isPersonal ? 'Lent (gave credit)' : 'Borrowed (took credit)';
-      modalTypeSelect.options[2].textContent = isPersonal ? 'Paid back (repay)' : 'Paid (payment)';
+      modalTypeSelect.options[1].textContent = isPersonal ? 'Lent (I gave money)' : 'Credit Given (sold on credit)';
+      modalTypeSelect.options[2].textContent = isPersonal ? 'Paid Back (they returned)' : 'Payment Received (they paid)';
     }
 
     const editModalTypeSelect = document.getElementById('editTxnType');
     if (editModalTypeSelect && editModalTypeSelect.options[0] && editModalTypeSelect.options[1]) {
-      editModalTypeSelect.options[0].textContent = isPersonal ? 'Lent (gave credit)' : 'Borrowed (took credit)';
-      editModalTypeSelect.options[1].textContent = isPersonal ? 'Paid back (repay)' : 'Paid (payment)';
+      editModalTypeSelect.options[0].textContent = isPersonal ? 'Lent (I gave money)' : 'Credit Given (sold on credit)';
+      editModalTypeSelect.options[1].textContent = isPersonal ? 'Paid Back (they returned)' : 'Payment Received (they paid)';
     }
   }
 }
@@ -301,9 +301,9 @@ function getTxnTypeName(type, userType) {
   const isPersonal = userType === 'personal';
   const t = String(type).toLowerCase();
   if (t === 'credit') {
-    return isPersonal ? 'Lent' : 'Borrowed';
+    return isPersonal ? 'Lent' : 'Credit Given';
   } else if (t === 'payment') {
-    return isPersonal ? 'Paid back' : 'Paid';
+    return isPersonal ? 'Paid Back' : 'Payment Received';
   }
   return type;
 }
@@ -454,8 +454,8 @@ function renderSearchResults(results, dropdown) {
           <span class="search-item-title">${escHtml(t.customerName)}</span>
           <span class="search-item-sub">${t.date} — ${escHtml(t.note || '—')}</span>
         </div>
-        <div class="search-item-right ${t.type === 'credit' ? 'amount-due' : 'amount-paid'}">
-          ${t.type === 'credit' ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN')}
+        <div class="search-item-right ${t.type === 'payment' ? 'amount-paid' : 'amount-due'}">
+          ${t.type === 'payment' ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN')}
         </div>
       `;
       item.addEventListener('click', () => {

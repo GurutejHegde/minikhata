@@ -432,7 +432,7 @@
                 </span>
               </td>
               <td class="${isReversed ? '' : (t.type === 'credit' ? 'amount-due' : 'amount-paid')}">
-                ${t.type === 'credit' ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN')}
+                ${t.type === 'payment' ? '+' : '-'}₹${parseFloat(t.amount).toLocaleString('en-IN')}
               </td>
               <td>${t.date}</td>
               <td>
