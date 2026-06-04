@@ -65,8 +65,8 @@ async function seed() {
       const customerIds = [];
       for (const c of customers) {
         const [res] = await conn.query(
-          `INSERT INTO customers (user_id, name, phone, address, created_at) VALUES (?, ?, ?, ?, ?)`,
-          [userId, c.name, c.phone, c.address, c.created]
+          `INSERT INTO customers (user_id, name, phone, address, ledger_type, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+          [userId, c.name, c.phone, c.address, 'business', c.created]
         );
         customerIds.push(res.insertId);
       }

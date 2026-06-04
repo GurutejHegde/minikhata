@@ -118,6 +118,15 @@ async function run() {
       `);
     }
 
+    // Check and add ledger_type to customers
+    if (!custColNames.includes('ledger_type')) {
+      console.log('Adding ledger_type column to customers...');
+      await conn.query(`
+        ALTER TABLE customers 
+        ADD COLUMN ledger_type ENUM('personal', 'business') NOT NULL DEFAULT 'business'
+      `);
+    }
+
     await conn.commit();
     console.log('✓ Migrations successfully completed!');
   } catch (err) {

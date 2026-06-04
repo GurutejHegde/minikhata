@@ -9,6 +9,7 @@ function auth(req, res, next) {
 
 // GET /api/customers — get all with balance (supports pagination/sorting/searching if query params present)
 router.get('/', auth, async (req, res) => {
+  const ledgerType = req.session.user.userType || 'business';
   try {
     // If not requesting pagination, return full list (backward compatible)
     if (!req.query.page && !req.query.limit && !req.query.search) {
@@ -26,10 +27,10 @@ router.get('/', auth, async (req, res) => {
           ) AS balance
         FROM customers c
         LEFT JOIN transactions t ON c.customer_id = t.customer_id
-        WHERE c.user_id = ?
+        WHERE c.user_id = ? AND c.ledger_type = ?
         GROUP BY c.customer_id
         ORDER BY c.name ASC
-      `, [req.session.user.id]);
+      `, [req.session.user.id, ledgerType]);
       return res.json(rows);
     }
 
@@ -49,8 +50,8 @@ router.get('/', auth, async (req, res) => {
     };
     const sortCol = allowedSortCols[sortBy] || 'c.name';
 
-    let searchFilter = ' WHERE c.user_id = ?';
-    const params = [req.session.user.id];
+    let searchFilter = ' WHERE c.user_id = ? AND c.ledger_type = ?';
+    const params = [req.session.user.id, ledgerType];
     if (req.query.search) {
       searchFilter += ' AND (c.name LIKE ? OR c.phone LIKE ?)';
       const searchVal = `%${req.query.search}%`;
@@ -101,6 +102,7 @@ router.get('/', auth, async (req, res) => {
 // GET /api/customers/search?q=term
 router.get('/search', auth, async (req, res) => {
   const q = `%${req.query.q || ''}%`;
+  const ledgerType = req.session.user.userType || 'business';
   try {
     const [rows] = await db.query(
       `SELECT 
@@ -112,10 +114,10 @@ router.get('/search', auth, async (req, res) => {
         ) AS balance
        FROM customers c
        LEFT JOIN transactions t ON c.customer_id = t.customer_id
-       WHERE c.user_id = ? AND (c.name LIKE ? OR c.phone LIKE ?)
+       WHERE c.user_id = ? AND c.ledger_type = ? AND (c.name LIKE ? OR c.phone LIKE ?)
        GROUP BY c.customer_id
        ORDER BY c.name ASC`,
-      [req.session.user.id, q, q]
+      [req.session.user.id, ledgerType, q, q]
     );
     res.json(rows);
   } catch (err) {
@@ -126,6 +128,7 @@ router.get('/search', auth, async (req, res) => {
 
 // GET /api/customers/overdue — customers with overdue credits or overdue installments
 router.get('/overdue', auth, async (req, res) => {
+  const ledgerType = req.session.user.userType || 'business';
   try {
     const [rows] = await db.query(`
       SELECT 
@@ -166,11 +169,11 @@ router.get('/overdue', auth, async (req, res) => {
         ) AS daysSinceOverdue
       FROM customers c
       LEFT JOIN transactions t ON c.customer_id = t.customer_id
-      WHERE c.user_id = ?
+      WHERE c.user_id = ? AND c.ledger_type = ?
       GROUP BY c.customer_id
       HAVING oldestOverdueDate != '9999-12-31'
       ORDER BY daysSinceOverdue DESC
-    `, [req.session.user.id]);
+    `, [req.session.user.id, ledgerType]);
     
     // Map response keys for frontend compatibility
     const mapped = rows.map(r => ({
@@ -188,6 +191,7 @@ router.get('/overdue', auth, async (req, res) => {
 
 // GET /api/customers/:id — single customer + balance
 router.get('/:id', auth, async (req, res) => {
+  const ledgerType = req.session.user.userType || 'business';
   try {
     const [rows] = await db.query(`
       SELECT
@@ -198,9 +202,9 @@ router.get('/:id', auth, async (req, res) => {
         ) AS balance
       FROM customers c
       LEFT JOIN transactions t ON c.customer_id = t.customer_id
-      WHERE c.customer_id = ? AND c.user_id = ?
+      WHERE c.customer_id = ? AND c.user_id = ? AND c.ledger_type = ?
       GROUP BY c.customer_id
-    `, [req.params.id, req.session.user.id]);
+    `, [req.params.id, req.session.user.id, ledgerType]);
 
     if (rows.length === 0) return res.status(404).json({ error: 'Customer not found' });
     res.json(rows[0]);
@@ -215,10 +219,11 @@ router.post('/', auth, async (req, res) => {
   const { name, phone, address } = req.body;
   if (!name || !phone) return res.status(400).json({ error: 'Name and phone are required' });
 
+  const ledgerType = req.session.user.userType || 'business';
   try {
     const [result] = await db.query(
-      'INSERT INTO customers (name, phone, address, user_id) VALUES (?, ?, ?, ?)',
-      [name.trim(), phone.trim(), address?.trim() || '', req.session.user.id]
+      'INSERT INTO customers (name, phone, address, user_id, ledger_type) VALUES (?, ?, ?, ?, ?)',
+      [name.trim(), phone.trim(), address?.trim() || '', req.session.user.id, ledgerType]
     );
     res.status(201).json({ id: result.insertId, name, phone, address });
   } catch (err) {
@@ -232,10 +237,11 @@ router.put('/:id', auth, async (req, res) => {
   const { name, phone, address } = req.body;
   if (!name || !phone) return res.status(400).json({ error: 'Name and phone are required' });
 
+  const ledgerType = req.session.user.userType || 'business';
   try {
     await db.query(
-      'UPDATE customers SET name = ?, phone = ?, address = ? WHERE customer_id = ? AND user_id = ?',
-      [name.trim(), phone.trim(), address?.trim() || '', req.params.id, req.session.user.id]
+      'UPDATE customers SET name = ?, phone = ?, address = ? WHERE customer_id = ? AND user_id = ? AND ledger_type = ?',
+      [name.trim(), phone.trim(), address?.trim() || '', req.params.id, req.session.user.id, ledgerType]
     );
     res.json({ success: true });
   } catch (err) {
@@ -246,8 +252,9 @@ router.put('/:id', auth, async (req, res) => {
 
 // DELETE /api/customers/:id
 router.delete('/:id', auth, async (req, res) => {
+  const ledgerType = req.session.user.userType || 'business';
   try {
-    await db.query('DELETE FROM customers WHERE customer_id = ? AND user_id = ?', [req.params.id, req.session.user.id]);
+    await db.query('DELETE FROM customers WHERE customer_id = ? AND user_id = ? AND ledger_type = ?', [req.params.id, req.session.user.id, ledgerType]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);

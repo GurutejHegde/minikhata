@@ -16,15 +16,16 @@ router.get('/', auth, async (req, res) => {
   }
 
   const queryLike = `%${q}%`;
+  const ledgerType = req.session.user.userType || 'business';
 
   try {
     // 1. Search Customers / People
     const [customers] = await db.query(
       `SELECT customer_id AS id, name, phone, address 
        FROM customers 
-       WHERE user_id = ? AND (name LIKE ? OR phone LIKE ?) 
+       WHERE user_id = ? AND ledger_type = ? AND (name LIKE ? OR phone LIKE ?) 
        ORDER BY name ASC LIMIT 10`,
-      [req.session.user.id, queryLike, queryLike]
+      [req.session.user.id, ledgerType, queryLike, queryLike]
     );
 
     // 2. Search Transactions / Lendings
@@ -33,9 +34,9 @@ router.get('/', auth, async (req, res) => {
               t.type, t.amount, t.date, t.note 
        FROM transactions t 
        JOIN customers c ON t.customer_id = c.customer_id 
-       WHERE c.user_id = ? AND (t.note LIKE ? OR CAST(t.amount AS CHAR) LIKE ?) 
+       WHERE c.user_id = ? AND c.ledger_type = ? AND (t.note LIKE ? OR CAST(t.amount AS CHAR) LIKE ?) 
        ORDER BY t.date DESC, t.transaction_id DESC LIMIT 10`,
-      [req.session.user.id, queryLike, queryLike]
+      [req.session.user.id, ledgerType, queryLike, queryLike]
     );
 
     res.json({ customers, transactions });

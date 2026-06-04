@@ -13,6 +13,7 @@ router.get('/monthly', auth, async (req, res) => {
   const from = req.query.from || '1970-01-01';
   const to   = req.query.to   || '2099-12-31';
 
+  const ledgerType = req.session.user.userType || 'business';
   try {
     // 1. Monthly chart data
     const [chartData] = await db.query(`
@@ -22,10 +23,10 @@ router.get('/monthly', auth, async (req, res) => {
         SUM(CASE WHEN t.type = 'payment' THEN t.amount ELSE 0 END) AS payment
       FROM transactions t
       JOIN customers c ON t.customer_id = c.customer_id
-      WHERE t.date BETWEEN ? AND ? AND t.status = 'active' AND c.user_id = ?
+      WHERE t.date BETWEEN ? AND ? AND t.status = 'active' AND c.user_id = ? AND c.ledger_type = ?
       GROUP BY month
       ORDER BY month ASC
-    `, [from, to, req.session.user.id]);
+    `, [from, to, req.session.user.id, ledgerType]);
 
     // 2. Summary stats for the range
     const [[summary]] = await db.query(`
@@ -35,8 +36,8 @@ router.get('/monthly', auth, async (req, res) => {
         COALESCE(SUM(CASE WHEN t.type = 'credit' THEN t.amount ELSE -t.amount END), 0) AS totalOutstanding
       FROM transactions t
       JOIN customers c ON t.customer_id = c.customer_id
-      WHERE t.date BETWEEN ? AND ? AND t.status = 'active' AND c.user_id = ?
-    `, [from, to, req.session.user.id]);
+      WHERE t.date BETWEEN ? AND ? AND t.status = 'active' AND c.user_id = ? AND c.ledger_type = ?
+    `, [from, to, req.session.user.id, ledgerType]);
 
     // Format fields to numbers
     if (summary) {

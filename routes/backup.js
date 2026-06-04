@@ -12,7 +12,7 @@ router.get('/export', auth, async (req, res) => {
   const userId = req.session.user.id;
   try {
     const [customers] = await db.query(
-      'SELECT customer_id, name, phone, address, created_at FROM customers WHERE user_id = ?',
+      'SELECT customer_id, name, phone, address, ledger_type, created_at FROM customers WHERE user_id = ?',
       [userId]
     );
 
@@ -130,13 +130,14 @@ router.post('/restore', auth, async (req, res) => {
     // 3. Restore Customers
     for (const c of customers) {
       const [result] = await conn.query(
-        `INSERT INTO customers (name, phone, address, user_id, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO customers (name, phone, address, user_id, ledger_type, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
           c.name,
           c.phone,
           c.address || '',
           userId,
+          c.ledger_type || 'business',
           c.created_at ? new Date(c.created_at).toISOString().split('T')[0] : null
         ]
       );

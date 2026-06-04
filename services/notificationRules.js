@@ -10,6 +10,32 @@ async function generateNotifications(userId, conn) {
   const runner = conn || db;
   const today = new Date().toISOString().split('T')[0];
 
+  // Fetch current user type to filter notifications by active mode
+  const [[user]] = await runner.query('SELECT user_type FROM users WHERE user_id = ?', [userId]);
+  const ledgerType = user ? user.user_type : 'business';
+
+  // Cleanup notifications that don't belong to the active mode
+  await runner.query(`
+    DELETE n FROM notifications n
+    JOIN customers c ON n.reference_id = c.customer_id
+    WHERE n.user_id = ? AND n.type IN ('high_balance', 'inactive_customer') AND c.ledger_type != ?
+  `, [userId, ledgerType]);
+
+  await runner.query(`
+    DELETE n FROM notifications n
+    JOIN transactions t ON n.reference_id = t.transaction_id
+    JOIN customers c ON t.customer_id = c.customer_id
+    WHERE n.user_id = ? AND n.type IN ('overdue_credit', 'upcoming_due_credit', 'received_payment') AND c.ledger_type != ?
+  `, [userId, ledgerType]);
+
+  await runner.query(`
+    DELETE n FROM notifications n
+    JOIN installments i ON n.reference_id = i.id
+    JOIN transactions t ON i.transaction_id = t.transaction_id
+    JOIN customers c ON t.customer_id = c.customer_id
+    WHERE n.user_id = ? AND n.type IN ('overdue_installment', 'upcoming_due_installment') AND c.ledger_type != ?
+  `, [userId, ledgerType]);
+
   // 1. RULE: High Pending Balance (> 10,000)
   // Fetch customer balances
   const [customerBalances] = await runner.query(`
@@ -19,9 +45,9 @@ async function generateNotifications(userId, conn) {
                              ELSE 0 END), 0) AS balance
     FROM customers c
     LEFT JOIN transactions t ON c.customer_id = t.customer_id
-    WHERE c.user_id = ?
+    WHERE c.user_id = ? AND c.ledger_type = ?
     GROUP BY c.customer_id
-  `, [userId]);
+  `, [userId, ledgerType]);
 
   for (const c of customerBalances) {
     const bal = parseFloat(c.balance);
@@ -55,10 +81,10 @@ async function generateNotifications(userId, conn) {
            MAX(CASE WHEN t.status = 'active' THEN t.date ELSE NULL END) AS lastTxnDate
     FROM customers c
     LEFT JOIN transactions t ON c.customer_id = t.customer_id
-    WHERE c.user_id = ?
+    WHERE c.user_id = ? AND c.ledger_type = ?
     GROUP BY c.customer_id
     HAVING balance > 0 AND (lastTxnDate < DATE_SUB(CURDATE(), INTERVAL 45 DAY) OR lastTxnDate IS NULL)
-  `, [userId]);
+  `, [userId, ledgerType]);
 
   const activeInactiveIds = inactiveCustomers.map(ic => ic.id);
 
@@ -96,9 +122,9 @@ async function generateNotifications(userId, conn) {
     FROM transactions t
     JOIN customers c ON t.customer_id = c.customer_id
     WHERE t.type = 'credit' AND t.status = 'active' AND t.due_date IS NOT NULL AND t.due_date < CURDATE()
-      AND c.user_id = ?
+      AND c.user_id = ? AND c.ledger_type = ?
     HAVING remainingAmount > 0
-  `, [userId]);
+  `, [userId, ledgerType]);
 
   const overdueCreditIds = overdueCredits.map(oc => oc.id);
   // Remove overdue credit alerts for fully settled credits
@@ -133,9 +159,9 @@ async function generateNotifications(userId, conn) {
     JOIN customers c ON t.customer_id = c.customer_id
     WHERE t.type = 'credit' AND t.status = 'active' AND t.due_date IS NOT NULL 
       AND t.due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)
-      AND c.user_id = ?
+      AND c.user_id = ? AND c.ledger_type = ?
     HAVING remainingAmount > 0
-  `, [userId]);
+  `, [userId, ledgerType]);
 
   const upcomingCreditIds = upcomingCredits.map(uc => uc.id);
   if (upcomingCreditIds.length > 0) {
@@ -167,8 +193,8 @@ async function generateNotifications(userId, conn) {
     FROM installments i
     JOIN transactions t ON i.transaction_id = t.transaction_id
     JOIN customers c ON t.customer_id = c.customer_id
-    WHERE t.status = 'active' AND i.status = 'overdue' AND c.user_id = ?
-  `, [userId]);
+    WHERE t.status = 'active' AND i.status = 'overdue' AND c.user_id = ? AND c.ledger_type = ?
+  `, [userId, ledgerType]);
 
   const overdueInstIds = overdueInstallments.map(oi => oi.id);
   if (overdueInstIds.length > 0) {
@@ -202,8 +228,8 @@ async function generateNotifications(userId, conn) {
     JOIN customers c ON t.customer_id = c.customer_id
     WHERE t.status = 'active' AND i.status = 'pending' 
       AND i.due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)
-      AND c.user_id = ?
-  `, [userId]);
+      AND c.user_id = ? AND c.ledger_type = ?
+  `, [userId, ledgerType]);
 
   const upcomingInstIds = upcomingInstallments.map(ui => ui.id);
   if (upcomingInstIds.length > 0) {

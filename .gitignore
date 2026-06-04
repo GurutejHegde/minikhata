@@ -1,2 +1,4 @@
 node_modules/
 .env
+sub_report*.docx
+generate_report.py

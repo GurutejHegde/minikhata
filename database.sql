@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS customers (
   name        VARCHAR(100) NOT NULL,
   phone       VARCHAR(15)  NOT NULL,
   address     VARCHAR(200) DEFAULT '',
+  ledger_type ENUM('personal', 'business') NOT NULL DEFAULT 'business',
   created_at  DATE         DEFAULT (CURDATE()),
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );

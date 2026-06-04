@@ -11,14 +11,15 @@ function auth(req, res, next) {
 // GET /api/installments/transaction/:txnId — get installment timeline for a credit txn
 router.get('/transaction/:txnId', auth, async (req, res) => {
   try {
+    const ledgerType = req.session.user.userType || 'business';
     const [rows] = await db.query(
       `SELECT i.id, i.amount, i.due_date AS dueDate, i.status, i.paid_amount AS paidAmount
        FROM installments i
        JOIN transactions t ON i.transaction_id = t.transaction_id
        JOIN customers c ON t.customer_id = c.customer_id
-       WHERE i.transaction_id = ? AND c.user_id = ?
+       WHERE i.transaction_id = ? AND c.user_id = ? AND c.ledger_type = ?
        ORDER BY i.due_date ASC, i.id ASC`,
-      [req.params.txnId, req.session.user.id]
+      [req.params.txnId, req.session.user.id, ledgerType]
     );
     res.json(rows);
   } catch (err) {
@@ -40,13 +41,14 @@ router.post('/transaction/:txnId', auth, async (req, res) => {
   try {
     await conn.beginTransaction();
 
-    // Fetch transaction amount and customer id (scoped to current user)
+    // Fetch transaction amount and customer id (scoped to current user and active mode)
+    const ledgerType = req.session.user.userType || 'business';
     const [[txn]] = await conn.query(
       `SELECT t.amount, t.customer_id AS customerId, t.type, t.status 
        FROM transactions t
        JOIN customers c ON t.customer_id = c.customer_id
-       WHERE t.transaction_id = ? AND c.user_id = ?`,
-      [txnId, req.session.user.id]
+       WHERE t.transaction_id = ? AND c.user_id = ? AND c.ledger_type = ?`,
+      [txnId, req.session.user.id, ledgerType]
     );
 
     if (!txn) {

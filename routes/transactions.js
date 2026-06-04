@@ -29,8 +29,9 @@ router.get('/', auth, async (req, res) => {
   // If not requesting pagination, return full list (backward compatible)
   if (!req.query.page && !req.query.limit) {
     try {
-      let sqlFilters = ' WHERE c.user_id = ?';
-      const params = [req.session.user.id];
+      const ledgerType = req.session.user.userType || 'business';
+      let sqlFilters = ' WHERE c.user_id = ? AND c.ledger_type = ?';
+      const params = [req.session.user.id, ledgerType];
 
       if (req.query.customerId) {
         sqlFilters += ' AND t.customer_id = ?';
@@ -96,8 +97,9 @@ router.get('/', auth, async (req, res) => {
   const sortCol = allowedSortCols[sortBy] || 't.date';
 
   try {
-    let sqlFilters = ' WHERE c.user_id = ?';
-    const params = [req.session.user.id];
+    const ledgerType = req.session.user.userType || 'business';
+    let sqlFilters = ' WHERE c.user_id = ? AND c.ledger_type = ?';
+    const params = [req.session.user.id, ledgerType];
 
     if (req.query.customerId) {
       sqlFilters += ' AND t.customer_id = ?';
@@ -226,12 +228,13 @@ router.get('/customer/:id', auth, async (req, res) => {
 // GET /api/transactions/dashboard — summary stats
 router.get('/dashboard', auth, async (req, res) => {
   const userId = req.session.user.id;
+  const ledgerType = req.session.user.userType || 'business';
   try {
     const today = new Date().toISOString().split('T')[0];
 
     const [[{ totalCustomers }]] = await db.query(
-      'SELECT COUNT(*) AS totalCustomers FROM customers WHERE user_id = ?',
-      [userId]
+      'SELECT COUNT(*) AS totalCustomers FROM customers WHERE user_id = ? AND ledger_type = ?',
+      [userId, ledgerType]
     );
 
     // Outstanding balance based on active txns
@@ -242,15 +245,15 @@ router.get('/dashboard', auth, async (req, res) => {
       ), 0) AS totalPending
       FROM transactions t
       JOIN customers c ON t.customer_id = c.customer_id
-      WHERE t.status = 'active' AND c.user_id = ?
-    `, [userId]);
+      WHERE t.status = 'active' AND c.user_id = ? AND c.ledger_type = ?
+    `, [userId, ledgerType]);
 
     const [[{ todayCount }]] = await db.query(
       `SELECT COUNT(*) AS todayCount 
        FROM transactions t
        JOIN customers c ON t.customer_id = c.customer_id
-       WHERE t.date = ? AND t.status = 'active' AND c.user_id = ?`,
-      [today, userId]
+       WHERE t.date = ? AND t.status = 'active' AND c.user_id = ? AND c.ledger_type = ?`,
+      [today, userId, ledgerType]
     );
 
     // Overdue count: number of customers who have at least one active overdue credit or overdue installment
@@ -260,16 +263,16 @@ router.get('/dashboard', auth, async (req, res) => {
         FROM transactions t
         JOIN customers c ON t.customer_id = c.customer_id
         WHERE t.type = 'credit' AND t.status = 'active' AND t.due_date IS NOT NULL AND t.due_date < CURDATE()
-          AND c.user_id = ?
+          AND c.user_id = ? AND c.ledger_type = ?
           AND (t.amount - COALESCE((SELECT SUM(amount_allocated) FROM settlements WHERE credit_transaction_id = t.transaction_id), 0)) > 0
         UNION
         SELECT t.customer_id
         FROM installments i
         JOIN transactions t ON i.transaction_id = t.transaction_id
         JOIN customers c ON t.customer_id = c.customer_id
-        WHERE t.status = 'active' AND i.status = 'overdue' AND c.user_id = ?
+        WHERE t.status = 'active' AND i.status = 'overdue' AND c.user_id = ? AND c.ledger_type = ?
       ) AS overdue_customers
-    `, [userId, userId]);
+    `, [userId, ledgerType, userId, ledgerType]);
 
     // Dashboard dues summaries: 5 oldest active overdue credit transactions
     const [overdueSummaries] = await db.query(`
@@ -277,11 +280,11 @@ router.get('/dashboard', auth, async (req, res) => {
              (t.amount - COALESCE((SELECT SUM(amount_allocated) FROM settlements WHERE credit_transaction_id = t.transaction_id), 0)) AS remainingAmount
       FROM transactions t
       JOIN customers c ON t.customer_id = c.customer_id
-      WHERE t.type = 'credit' AND t.status = 'active' AND t.due_date IS NOT NULL AND t.due_date < CURDATE() AND c.user_id = ?
+      WHERE t.type = 'credit' AND t.status = 'active' AND t.due_date IS NOT NULL AND t.due_date < CURDATE() AND c.user_id = ? AND c.ledger_type = ?
       HAVING remainingAmount > 0
       ORDER BY t.due_date ASC
       LIMIT 5
-    `, [userId]);
+    `, [userId, ledgerType]);
 
     // Upcoming dues: 5 credits due in the next 7 days
     const [upcomingDues] = await db.query(`
@@ -290,11 +293,11 @@ router.get('/dashboard', auth, async (req, res) => {
       FROM transactions t
       JOIN customers c ON t.customer_id = c.customer_id
       WHERE t.type = 'credit' AND t.status = 'active' AND t.due_date IS NOT NULL 
-        AND t.due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY) AND c.user_id = ?
+        AND t.due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY) AND c.user_id = ? AND c.ledger_type = ?
       HAVING remainingAmount > 0
       ORDER BY t.due_date ASC
       LIMIT 5
-    `, [userId]);
+    `, [userId, ledgerType]);
 
     res.json({
       totalCustomers,
@@ -329,10 +332,11 @@ router.post('/', auth, async (req, res) => {
   try {
     await conn.beginTransaction();
 
-    // Fetch customer info (verifying user ownership)
+    // Fetch customer info (verifying user ownership and matching ledger type)
+    const ledgerType = req.session.user.userType || 'business';
     const [[customer]] = await conn.query(
-      'SELECT name FROM customers WHERE customer_id = ? AND user_id = ?',
-      [customerId, userId]
+      'SELECT name FROM customers WHERE customer_id = ? AND user_id = ? AND ledger_type = ?',
+      [customerId, userId, ledgerType]
     );
     if (!customer) {
       await conn.rollback();
@@ -390,13 +394,14 @@ router.put('/:id', auth, async (req, res) => {
   try {
     await conn.beginTransaction();
 
-    // Fetch existing transaction (verifying user ownership)
+    // Fetch existing transaction (verifying user ownership and active ledger_type)
+    const ledgerType = req.session.user.userType || 'business';
     const [[existing]] = await conn.query(
       `SELECT t.customer_id, t.amount, t.type 
        FROM transactions t
        JOIN customers c ON t.customer_id = c.customer_id
-       WHERE t.transaction_id = ? AND c.user_id = ?`,
-      [id, userId]
+       WHERE t.transaction_id = ? AND c.user_id = ? AND c.ledger_type = ?`,
+      [id, userId, ledgerType]
     );
     if (!existing) {
       await conn.rollback();
@@ -436,12 +441,13 @@ router.post('/:id/reverse', auth, async (req, res) => {
   try {
     await conn.beginTransaction();
 
+    const ledgerType = req.session.user.userType || 'business';
     const [[txn]] = await conn.query(
       `SELECT t.customer_id, t.type, t.amount, t.status 
        FROM transactions t
        JOIN customers c ON t.customer_id = c.customer_id
-       WHERE t.transaction_id = ? AND c.user_id = ?`,
-      [id, userId]
+       WHERE t.transaction_id = ? AND c.user_id = ? AND c.ledger_type = ?`,
+      [id, userId, ledgerType]
     );
     if (!txn) {
       await conn.rollback();
@@ -482,12 +488,13 @@ router.post('/:id/unreverse', auth, async (req, res) => {
   try {
     await conn.beginTransaction();
 
+    const ledgerType = req.session.user.userType || 'business';
     const [[txn]] = await conn.query(
       `SELECT t.customer_id, t.type, t.amount, t.status 
        FROM transactions t
        JOIN customers c ON t.customer_id = c.customer_id
-       WHERE t.transaction_id = ? AND c.user_id = ?`,
-      [id, userId]
+       WHERE t.transaction_id = ? AND c.user_id = ? AND c.ledger_type = ?`,
+      [id, userId, ledgerType]
     );
     if (!txn) {
       await conn.rollback();
@@ -528,12 +535,13 @@ router.delete('/:id', auth, async (req, res) => {
   try {
     await conn.beginTransaction();
 
+    const ledgerType = req.session.user.userType || 'business';
     const [[txn]] = await conn.query(
       `SELECT t.customer_id, t.status 
        FROM transactions t
        JOIN customers c ON t.customer_id = c.customer_id
-       WHERE t.transaction_id = ? AND c.user_id = ?`,
-      [id, userId]
+       WHERE t.transaction_id = ? AND c.user_id = ? AND c.ledger_type = ?`,
+      [id, userId, ledgerType]
     );
     if (!txn) {
       await conn.rollback();
